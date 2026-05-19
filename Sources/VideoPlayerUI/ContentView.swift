@@ -24,9 +24,13 @@ struct ContentView: View {
             VStack {
                 Spacer()
 
-                PlayerControlsView(state: state)
-                    .padding(.horizontal, 84)
-                    .padding(.bottom, 34)
+                ZStack {
+                    controlsContrastField
+
+                    PlayerControlsView(state: state)
+                }
+                .padding(.horizontal, 84)
+                .padding(.bottom, 34)
             }
         }
         .background(appBackdrop)
@@ -149,6 +153,21 @@ struct ContentView: View {
             endPoint: .bottom
         )
         .ignoresSafeArea()
+    }
+
+    private var controlsContrastField: some View {
+        LinearGradient(
+            colors: [
+                .clear,
+                Color(red: 0.04, green: 0.05, blue: 0.18).opacity(0.26),
+                .black.opacity(0.16)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(maxWidth: 880, maxHeight: 120)
+        .blur(radius: 18)
+        .allowsHitTesting(false)
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {

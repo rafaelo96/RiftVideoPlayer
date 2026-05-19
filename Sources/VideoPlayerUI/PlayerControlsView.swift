@@ -5,27 +5,27 @@ struct PlayerControlsView: View {
 
     var body: some View {
         // Floating control island, always visible for this iteration.
-        LiquidGlassPanel(cornerRadius: 18) {
-            VStack(spacing: 7) {
-                HStack(alignment: .center, spacing: 16) {
+        LiquidGlassPanel(cornerRadius: 17) {
+            VStack(spacing: 6) {
+                HStack(alignment: .center, spacing: 13) {
                     volumeControl
 
-                    Spacer(minLength: 16)
+                    Spacer(minLength: 12)
 
                     transportControls
 
-                    Spacer(minLength: 16)
+                    Spacer(minLength: 12)
 
                     speedAndFPS
                 }
 
                 timeline
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 9)
-            .padding(.bottom, 11)
+            .padding(.horizontal, 16)
+            .padding(.top, 7)
+            .padding(.bottom, 9)
         }
-        .frame(maxWidth: 900)
+        .frame(maxWidth: 800)
         .animation(.easeInOut(duration: 0.22), value: state.isPlaying)
         .animation(.easeInOut(duration: 0.22), value: state.playbackRate)
         .animation(.easeInOut(duration: 0.22), value: state.fpsMode)
@@ -35,7 +35,7 @@ struct PlayerControlsView: View {
         // Current time, scrubber, and total duration stay on one compact row.
         HStack(spacing: 11) {
             Text(state.formattedTime(state.currentTime))
-                .frame(width: 47, alignment: .leading)
+                .frame(width: 43, alignment: .leading)
 
             Slider(
                 value: Binding(
@@ -47,18 +47,18 @@ struct PlayerControlsView: View {
             .tint(Color(red: 0.48, green: 0.36, blue: 1.0))
 
             Text(state.formattedTime(state.duration))
-                .frame(width: 47, alignment: .trailing)
+                .frame(width: 43, alignment: .trailing)
         }
-        .font(.system(size: 14, weight: .regular, design: .default))
+        .font(.system(size: 13, weight: .regular, design: .default))
         .foregroundStyle(.white.opacity(0.9))
     }
 
     private var volumeControl: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Image(systemName: volumeIcon)
-                .font(.system(size: 19, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.92))
-                .frame(width: 24)
+                .frame(width: 21)
 
             Slider(
                 value: Binding(
@@ -68,14 +68,14 @@ struct PlayerControlsView: View {
                 in: 0...1
             )
             .tint(Color(red: 0.50, green: 0.37, blue: 1.0))
-            .frame(width: 108)
+            .frame(width: 88)
         }
-        .frame(width: 146, alignment: .leading)
+        .frame(width: 119, alignment: .leading)
     }
 
     private var transportControls: some View {
         // The transport cluster intentionally contains only back, play/pause, and forward.
-        HStack(spacing: 30) {
+        HStack(spacing: 24) {
             LiquidGlassButton(systemName: "backward.end.fill", size: .largeIcon) {
                 state.seek(by: -10)
             }
@@ -86,9 +86,9 @@ struct PlayerControlsView: View {
                 }
             } label: {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.system(size: 21, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
+                    .frame(width: 44, height: 44)
                     .background {
                         Circle()
                             .fill(.ultraThinMaterial)
@@ -110,7 +110,7 @@ struct PlayerControlsView: View {
                                     .stroke(.white.opacity(0.24), lineWidth: 1)
                             }
                     }
-                    .shadow(color: Color(red: 0.38, green: 0.34, blue: 1.0).opacity(0.30), radius: 11, x: 0, y: 6)
+                    .shadow(color: Color(red: 0.38, green: 0.34, blue: 1.0).opacity(0.26), radius: 10, x: 0, y: 5)
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
@@ -123,7 +123,7 @@ struct PlayerControlsView: View {
     }
 
     private var speedAndFPS: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             LiquidGlassButton(
                 title: speedTitle,
                 subtitle: "Velocidad",
@@ -144,7 +144,7 @@ struct PlayerControlsView: View {
                 state.cycleFPSMode()
             }
         }
-        .frame(width: 200, alignment: .trailing)
+        .frame(width: 176, alignment: .trailing)
     }
 
     private var volumeIcon: String {
