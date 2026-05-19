@@ -122,6 +122,13 @@ struct ContentView: View {
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                         .foregroundStyle(.white.opacity(0.66))
+
+                    if let statusMessage = state.statusMessage {
+                        Text(statusMessage)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Color(red: 0.62, green: 0.58, blue: 1.0))
+                            .padding(.top, 4)
+                    }
                 }
             }
             .scaleEffect(isDropTargeted ? 1.04 : 1)
