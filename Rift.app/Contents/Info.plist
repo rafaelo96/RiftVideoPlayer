@@ -4,19 +4,25 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
-	<key>CFBundleExecutable</key>
-	<string>Rift</string>
-	<key>CFBundleIdentifier</key>
-	<string>local.rafael.Rift</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>Rift</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>mp4</string>
+				<string>m4v</string>
+				<string>mov</string>
+				<string>mkv</string>
+				<string>webm</string>
+				<string>avi</string>
+				<string>wmv</string>
+				<string>flv</string>
+				<string>ts</string>
+				<string>m2ts</string>
+				<string>mpeg</string>
+				<string>mpg</string>
+				<string>3gp</string>
+			</array>
 			<key>CFBundleTypeName</key>
 			<string>Video Files</string>
 			<key>CFBundleTypeRole</key>
@@ -37,24 +43,18 @@
 				<string>public.3gpp</string>
 				<string>com.microsoft.windows-media-wmv</string>
 			</array>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>mp4</string>
-				<string>m4v</string>
-				<string>mov</string>
-				<string>mkv</string>
-				<string>webm</string>
-				<string>avi</string>
-				<string>wmv</string>
-				<string>flv</string>
-				<string>ts</string>
-				<string>m2ts</string>
-				<string>mpeg</string>
-				<string>mpg</string>
-				<string>3gp</string>
-			</array>
 		</dict>
 	</array>
+	<key>CFBundleExecutable</key>
+	<string>Rift</string>
+	<key>CFBundleIconFile</key>
+	<string>icon</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.rafael.Rift</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Rift</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
