@@ -5,16 +5,12 @@ struct PlayerControlsView: View {
 
     var body: some View {
         LiquidGlassPanel(cornerRadius: 18) {
-            VStack(spacing: 9) {
+            VStack(spacing: 8) {
                 HStack {
                     Spacer(minLength: 24)
                     timeline
                     Spacer(minLength: 24)
                 }
-
-                Divider()
-                    .overlay(.white.opacity(0.10))
-                    .padding(.horizontal, 4)
 
                 HStack(spacing: 16) {
                     playbackInfoCluster

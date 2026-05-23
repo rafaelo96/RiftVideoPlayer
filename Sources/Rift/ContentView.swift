@@ -17,7 +17,7 @@ struct ContentView: View {
             appBackdrop
 
             if state.hasVideo {
-                VideoPlayerView(
+                RiftPlayerView(
                     player: state.player,
                     fpsMode: state.fpsMode,
                     interpolationMode: state.interpolationMode,
@@ -40,18 +40,6 @@ struct ContentView: View {
                 .ignoresSafeArea()
                 .overlay(videoVignette)
                 .transition(.opacity.combined(with: .scale(scale: 1.01)))
-
-                VStack {
-                    HStack {
-                        statsHUD
-                            .padding(.leading, 22)
-                            .padding(.top, 22)
-
-                        Spacer()
-                    }
-
-                    Spacer()
-                }
             }
 
             if !state.hasVideo {
@@ -83,6 +71,7 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.18), value: isDropTargeted)
         .onAppear {
             setupMouseMonitor()
+            handleOpenURLs(AppDelegate.takePendingOpenURLs())
         }
         .onDisappear {
             cleanupMouseMonitor()
@@ -90,6 +79,10 @@ struct ContentView: View {
         }
         .onChange(of: state.isPlaying) {
             resetHideTimer()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .riftOpenURLs)) { notification in
+            let urls = notification.userInfo?["urls"] as? [URL] ?? []
+            handleOpenURLs(urls)
         }
     }
 
@@ -262,72 +255,6 @@ struct ContentView: View {
         .allowsHitTesting(false)
     }
 
-    private var statsHUD: some View {
-        LiquidGlassPanel(cornerRadius: 14) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("HUD")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.62))
-
-                Text("Dibujo \(String(format: "%.0f", state.displayRenderingFPS)) FPS")
-                    .font(.system(size: 12, weight: .medium))
-
-                if let sourceFrameRate = state.sourceFrameRate {
-                    Text("Fuente \(String(format: "%.2f", sourceFrameRate)) FPS")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.72))
-                }
-
-                Text("Frame⁺ \(framePlusHUDState)")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(state.interpolationMode != .disabled ? Color(red: 0.42, green: 0.70, blue: 1.0) : .white.opacity(0.68))
-
-                if state.fpsMode == .flux {
-                    Text(state.rifeStatus)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(state.isRIFELoaded ? Color(red: 0.42, green: 0.70, blue: 1.0) : .white.opacity(0.70))
-
-                    Text("MEMC \(String(format: "%.0f", state.fluxOpticalFlowUsage * 100))%")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(state.fluxOpticalFlowUsage > 0.5 ? Color(red: 0.42, green: 0.70, blue: 1.0) : .white.opacity(0.70))
-
-                    if let fluxWorkingWidth = state.fluxWorkingWidth {
-                        Text("Interno \(fluxWorkingWidth)p")
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.70))
-                    }
-                }
-
-                if shouldShowRIFEWarning {
-                    Text("RIFE NO INSTALADO")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color(red: 1.0, green: 0.58, blue: 0.34))
-                }
-
-                if let videoResolution = state.videoResolution {
-                    Text(videoResolution)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.70))
-                }
-            }
-            .foregroundStyle(.white.opacity(0.88))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-        }
-        .frame(width: 148, alignment: .leading)
-        .allowsHitTesting(false)
-    }
-
-    private var framePlusHUDState: String {
-        if state.isFramePlusPreparing { return "Preparando" }
-        if state.isFramePlusPreRendered { return "60fps listo" }
-        return state.interpolationMode == .disabled ? "Desactivado" : "Activado"
-    }
-
-    private var shouldShowRIFEWarning: Bool {
-        !state.isRIFELoaded && state.interpolationMode != .disabled && state.interpolationMode != .motion2Intense
-    }
-
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) else {
             return false
@@ -354,5 +281,11 @@ struct ContentView: View {
         }
 
         return true
+    }
+
+    private func handleOpenURLs(_ urls: [URL]) {
+        guard let url = urls.first else { return }
+        state.loadVideo(url)
+        AppDelegate.bringPlayerWindowToFront()
     }
 }

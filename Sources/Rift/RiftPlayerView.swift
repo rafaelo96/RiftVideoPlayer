@@ -3,7 +3,7 @@ import CoreImage
 import MetalKit
 import SwiftUI
 
-struct VideoPlayerView: NSViewRepresentable {
+struct RiftPlayerView: NSViewRepresentable {
     let player: AVPlayer
     let fpsMode: FPSMode
     let interpolationMode: VideoInterpolationPipeline.InterpolationMode

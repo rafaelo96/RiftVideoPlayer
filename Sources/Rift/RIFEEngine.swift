@@ -40,7 +40,7 @@ actor RIFEEngine {
     private let inputFrame1Name: String
     private let timestepName: String
     private let outputName: String
-    private let signposter = OSSignposter(subsystem: "VideoPlayerUI", category: "RIFE")
+    private let signposter = OSSignposter(subsystem: "Rift", category: "RIFE")
     private let preallocatedTimestepArray: MLMultiArray
     private let cachedTimestepFeature: MLFeatureValue
     private var outputPool: CVPixelBufferPool?

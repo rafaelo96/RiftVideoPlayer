@@ -1,12 +1,16 @@
 import SwiftUI
 import AppKit
 
+extension Notification.Name {
+    static let riftOpenURLs = Notification.Name("RiftOpenURLs")
+}
+
 @main
-struct LiquidPlayerApp: App {
+struct RiftApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup("Liquid Player") {
+        WindowGroup("Rift") {
             if CommandLine.arguments.count > 1 {
                 EmptyView()
                     .frame(width: 1, height: 1)
@@ -25,7 +29,9 @@ struct LiquidPlayerApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private static var pendingOpenURLs: [URL] = []
     private var cliWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -42,11 +48,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Liquid Player"
+        window.title = "Rift"
         window.center()
         window.contentView = NSHostingView(rootView: ContentView())
         window.makeKeyAndOrderFront(nil)
         cliWindow = window
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        Self.enqueueOpenURLs(urls)
+        Self.bringPlayerWindowToFront()
+    }
+
+    @MainActor
+    static func takePendingOpenURLs() -> [URL] {
+        defer { pendingOpenURLs.removeAll() }
+        return pendingOpenURLs
+    }
+
+    @MainActor
+    private static func enqueueOpenURLs(_ urls: [URL]) {
+        pendingOpenURLs.append(contentsOf: urls)
+        NotificationCenter.default.post(name: .riftOpenURLs, object: nil, userInfo: ["urls": urls])
     }
 
     @MainActor

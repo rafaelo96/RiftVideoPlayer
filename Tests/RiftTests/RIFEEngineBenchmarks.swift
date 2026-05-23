@@ -1,7 +1,7 @@
 import CoreVideo
 import Darwin
 import XCTest
-@testable import VideoPlayerUI
+@testable import Rift
 
 final class RIFEEngineBenchmarks: XCTestCase {
     struct BenchmarkResult {

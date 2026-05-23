@@ -443,7 +443,7 @@ final class PlayerState: ObservableObject {
         statusMessage = "Preparando \(sourceURL.pathExtension.uppercased())..."
 
         let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("LiquidPlayer-\(UUID().uuidString).mp4")
+            .appendingPathComponent("Rift-\(UUID().uuidString).mp4")
 
         convertedVideoURL = outputURL
 
@@ -556,7 +556,7 @@ final class PlayerState: ObservableObject {
         statusMessage = "Frame⁺ preparando 60fps..."
 
         let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("LiquidPlayer-FramePlus-\(UUID().uuidString).mp4")
+            .appendingPathComponent("Rift-FramePlus-\(UUID().uuidString).mp4")
         convertedVideoURL = outputURL
 
         let args = [
