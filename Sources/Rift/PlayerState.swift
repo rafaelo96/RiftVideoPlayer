@@ -75,6 +75,13 @@ final class PlayerState: ObservableObject {
     }
 
     func cleanup() {
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        isPlaying = false
+        currentTime = 0
+        duration = 0
+        hasVideo = false
+
         if let timeObserver {
             player.removeTimeObserver(timeObserver)
             self.timeObserver = nil
