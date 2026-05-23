@@ -60,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.bringPlayerWindowToFront()
     }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+
     @MainActor
     static func takePendingOpenURLs() -> [URL] {
         defer { pendingOpenURLs.removeAll() }
