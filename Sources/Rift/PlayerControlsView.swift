@@ -200,7 +200,7 @@ struct PlayerControlsView: View {
     private var visualButton: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.18)) {
-                state.visualEnhancementsEnabled.toggle()
+                state.toggleVisualEnhancements()
             }
         } label: {
             simplePill(
@@ -357,8 +357,9 @@ struct PlayerControlsView: View {
     }
 
     private var framePlusStateTitle: String {
-        if state.isFramePlusPreparing { return "Preparando" }
+        if state.isFramePlusPreparing { return "Preparando HQ" }
         if state.isFramePlusPreRendered { return "60fps listo" }
-        return state.interpolationMode == .disabled ? "Desactivado" : "Activado"
+        if state.interpolationMode == .disabled { return "Desactivado" }
+        return state.isArtificialInterpolationActive ? "Interpolando" : "Esperando"
     }
 }

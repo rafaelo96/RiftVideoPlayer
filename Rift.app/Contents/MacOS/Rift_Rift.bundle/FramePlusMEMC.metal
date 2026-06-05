@@ -2,8 +2,8 @@
 using namespace metal;
 
 constant uint MEMC_DOWNSCALE = 8;
-constant uint MEMC_BLOCK_SIZE = 16;
-constant int MEMC_SEARCH_RADIUS = 4;
+constant uint MEMC_BLOCK_SIZE = 8;
+constant int MEMC_SEARCH_RADIUS = 8;
 
 struct MEMCParams {
     uint fullWidth;
@@ -152,9 +152,14 @@ kernel void memcWarp(
     float disagreement = distance(colorA.rgb, colorB.rgb);
     float confidence = 1.0 - smoothstep(params.occlusionThreshold * 0.55, params.occlusionThreshold, disagreement);
 
+    // FIX: Reduced from 96px to 32px. The old 96px zone suppressed warping across
+    // ~10% of the frame edges, pushing them to crossfade. 32px covers only the
+    // outermost border pixels where motion vectors are least reliable.
     float edgeDistance = min(min(pos.x, float(params.fullWidth) - pos.x), min(pos.y, float(params.fullHeight) - pos.y));
-    float edgeConfidence = smoothstep(0.0, 96.0, edgeDistance);
-    float finalMix = confidence * edgeConfidence;
+    float edgeConfidence = smoothstep(0.0, 32.0, edgeDistance);
+    float motionAmount = smoothstep(0.75, 6.0, length(motion));
+    float motionMix = mix(confidence, max(confidence, 0.42), motionAmount);
+    float finalMix = motionMix * edgeConfidence;
 
     output.write(mix(linearBlend, warped, finalMix), gid);
 }

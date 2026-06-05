@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:VideoPlayerUI}",
+            "name": "Debug Rift",
+            "target": "Rift",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug Rift"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:VideoPlayerUI}",
+            "name": "Release Rift",
+            "target": "Rift",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release Rift"
+        }
+    ]
+}
