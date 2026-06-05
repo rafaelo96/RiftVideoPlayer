@@ -4,7 +4,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
-final class PlayerState: ObservableObject {
+final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPushDelegate {
     // A single AVPlayer instance is shared between the video layer and SwiftUI controls.
     let player = AVPlayer()
 
@@ -31,7 +31,7 @@ final class PlayerState: ObservableObject {
     @Published var audioTracks: [AudioTrack] = []
     @Published var selectedAudioTrackIndex: Int = 0
     @Published var url: URL?
-    @Published var interpolationMode: VideoInterpolationPipeline.InterpolationMode = .motion2Intense
+    @Published var interpolationMode: VideoInterpolationPipeline.InterpolationMode = .disabled
     @Published var isFramePlusPreparing = false
     @Published var isFramePlusPreRendered = false
     @Published var visualEnhancementsEnabled = false
@@ -40,13 +40,18 @@ final class PlayerState: ObservableObject {
     @Published var availableTracks: [MediaTrack] = []
     @Published var selectedAudioTrack: MediaTrack?
     @Published var selectedSubtitleTrack: MediaTrack?
+    @Published var currentSubtitleText: String?
     @Published var hdrMetadata: HDRMetadata?
     @Published var isHDRContent = false
 
     private var timeObserver: Any?
     private var itemStatusObservation: NSKeyValueObservation?
+    private var legibleOutput: AVPlayerItemLegibleOutput?
+    private var subtitleSelectionGroup: AVMediaSelectionGroup?
+    private var subtitleOptionsByID: [String: AVMediaSelectionOption] = [:]
     private var conversionProcess: Process?
     private var convertedVideoURL: URL?
+    private var framePlusVideoURL: URL?
     private var originalVideoURL: URL?
     private var playbackSourceURL: URL?
     private let rates: [Float] = [1.0, 1.25, 1.5, 2.0]
@@ -54,17 +59,19 @@ final class PlayerState: ObservableObject {
 
     var displayRenderingFPS: Double {
         if isFramePlusPreRendered { return 60 }
-        if isFramePlusPreparing { return sourceFrameRate ?? 24 }
         if currentRenderingFPS > 0 { return currentRenderingFPS }
+        if isFramePlusPreparing { return sourceFrameRate ?? 24 }
         return sourceFrameRate ?? 0
     }
 
-    init() {
+    override init() {
+        super.init()
         player.volume = Float(volume)
         addTimeObserver()
 
         if CommandLine.arguments.contains("--fps=60") {
             fpsMode = .flux
+            interpolationMode = .motion2Intense
         }
 
         if let path = CommandLine.arguments.first(where: { !$0.hasPrefix("--") && $0 != CommandLine.arguments.first }) {
@@ -76,6 +83,7 @@ final class PlayerState: ObservableObject {
 
     func cleanup() {
         player.pause()
+        detachLegibleOutput()
         player.replaceCurrentItem(with: nil)
         isPlaying = false
         currentTime = 0
@@ -106,7 +114,9 @@ final class PlayerState: ObservableObject {
     }
 
     func seek(to seconds: Double) {
-        let boundedSeconds = max(0, min(seconds, duration))
+        let boundedSeconds = duration > 0
+            ? max(0, min(seconds, duration))
+            : max(0, seconds)
         let time = CMTime(seconds: boundedSeconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
         currentTime = boundedSeconds
@@ -144,27 +154,37 @@ final class PlayerState: ObservableObject {
             rifeEnabled = false
             fpsMode = .native
             statusMessage = "RIFE no disponible: falta RIFE.mlpackage"
+            applyVisualCompositionIfNeeded()
             return
         }
 
         if mode == .disabled {
-            isFramePlusPreparing = false
-            isFramePlusPreRendered = false
+            stopFramePlusPreparation()
+            restoreBaseVideoIfNeeded()
+            currentRenderingFPS = 0
+            isArtificialInterpolationActive = false
+            fluxWorkingWidth = nil
+            fluxOpticalFlowUsage = 0
+            fluxBlendFallbackUsage = 0
+            rifeEnabled = false
         }
 
         interpolationMode = mode
         rifeEnabled = requiresRIFE && isRIFELoaded
         fpsMode = mode == .disabled ? .native : .flux
+        applyVisualCompositionIfNeeded()
 
         if mode == .motion2Intense {
             isFramePlusPreparing = false
             isFramePlusPreRendered = false
+            statusMessage = nil
         }
     }
 
     func selectPipelineTrack(_ track: MediaTrack?) {
         guard let track else {
             selectedSubtitleTrack = nil
+            applySubtitleSelection(nil)
             return
         }
 
@@ -173,6 +193,7 @@ final class PlayerState: ObservableObject {
             selectedAudioTrack = track
         case .subtitle:
             selectedSubtitleTrack = track
+            applySubtitleSelection(track)
         case .video:
             break
         }
@@ -188,6 +209,11 @@ final class PlayerState: ObservableObject {
                 self.applyAudioMix(trackIndex: index, to: item, allTracks: allTracks)
             }
         }
+    }
+
+    func toggleVisualEnhancements() {
+        visualEnhancementsEnabled.toggle()
+        applyVisualCompositionIfNeeded()
     }
 
     func openVideo() {
@@ -242,6 +268,7 @@ final class PlayerState: ObservableObject {
         availableTracks = []
         selectedAudioTrack = nil
         selectedSubtitleTrack = nil
+        currentSubtitleText = nil
         hdrMetadata = nil
         isHDRContent = false
         metrics = PlaybackMetrics()
@@ -253,10 +280,11 @@ final class PlayerState: ObservableObject {
             return
         }
 
+        statusMessage = "Inspeccionando archivo..."
         Task { @MainActor in
             await prepareVideoMetadata(for: url)
+            playVideo(url, displayName: url.lastPathComponent)
         }
-        playVideo(url, displayName: url.lastPathComponent)
     }
 
     private func prepareVideoMetadata(for url: URL) async {
@@ -278,8 +306,11 @@ final class PlayerState: ObservableObject {
     }
 
     private func playVideo(_ url: URL, displayName: String) {
+        detachLegibleOutput()
         playbackSourceURL = url
         let item = AVPlayerItem(url: url)
+        configureLegibleOutput(for: item)
+        applyVisualCompositionIfNeeded(to: item)
         itemStatusObservation = item.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -289,7 +320,8 @@ final class PlayerState: ObservableObject {
                     break
                 case .readyToPlay:
                     self.statusMessage = nil
-                    self.loadAudioTracks(from: item)
+                    self.loadFrameRateFallback(from: item.asset)
+                    self.loadMediaTracks(from: item)
                     self.player.playImmediately(atRate: self.playbackRate)
                     self.isPlaying = true
                 case .failed:
@@ -415,7 +447,7 @@ final class PlayerState: ObservableObject {
 
     private func convertAndLoadVideo(_ sourceURL: URL) async {
         guard let ffmpegURL = findFFmpeg() else {
-            statusMessage = "Para reproducir MKV instala ffmpeg: brew install ffmpeg"
+            statusMessage = "Este formato necesita FFmpeg incluido en Rift o instalado con brew."
             hasVideo = false
             return
         }
@@ -549,6 +581,42 @@ final class PlayerState: ObservableObject {
         }
     }
 
+    private func startFramePlusPreparationIfUseful() {
+        guard !isFramePlusPreparing,
+              !isFramePlusPreRendered,
+              shouldPrepareFramePlusVideo,
+              let sourceURL = originalVideoURL else {
+            return
+        }
+
+        Task { @MainActor in
+            await prepareFramePlusVideo(from: sourceURL)
+        }
+    }
+
+    private var shouldPrepareFramePlusVideo: Bool {
+        guard let sourceFrameRate, sourceFrameRate.isFinite, sourceFrameRate > 0 else { return true }
+        return sourceFrameRate < 55
+    }
+
+    private func stopFramePlusPreparation() {
+        if isFramePlusPreparing {
+            conversionProcess?.terminate()
+            conversionProcess = nil
+        }
+        isFramePlusPreparing = false
+        isFramePlusPreRendered = false
+    }
+
+    private func restoreBaseVideoIfNeeded() {
+        guard let playbackSourceURL, playbackSourceURL == framePlusVideoURL else { return }
+        let resumeTime = currentTime
+        let baseURL = convertedVideoURL ?? originalVideoURL
+        guard let baseURL else { return }
+        playVideo(baseURL, displayName: originalVideoURL?.lastPathComponent ?? baseURL.lastPathComponent)
+        seek(to: resumeTime)
+    }
+
     private func prepareFramePlusVideo(from sourceURL: URL) async {
         guard !isFramePlusPreparing else { return }
         guard let ffmpegURL = findFFmpeg() else {
@@ -564,7 +632,8 @@ final class PlayerState: ObservableObject {
 
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("Rift-FramePlus-\(UUID().uuidString).mp4")
-        convertedVideoURL = outputURL
+        cleanupFramePlusVideo()
+        framePlusVideoURL = outputURL
 
         let args = [
             "-hide_banner",
@@ -588,17 +657,27 @@ final class PlayerState: ObservableObject {
         isFramePlusPreparing = false
 
         if success {
+            guard interpolationMode == .motion2Intense else {
+                cleanupFramePlusVideo()
+                return
+            }
+
             isFramePlusPreRendered = true
             fpsMode = .native
             sourceFrameRate = 60
             currentRenderingFPS = 60
             isArtificialInterpolationActive = true
+            let resumeTime = currentTime
             playVideo(outputURL, displayName: "\(fileName) · Frame⁺ 60fps")
+            seek(to: resumeTime)
         } else {
-            statusMessage = "Frame⁺ no pudo preparar 60fps."
-            interpolationMode = .disabled
-            fpsMode = .native
-            isFramePlusPreRendered = false
+            cleanupFramePlusVideo()
+            if interpolationMode == .motion2Intense {
+                statusMessage = "Frame⁺ no pudo preparar 60fps."
+                interpolationMode = .disabled
+                fpsMode = .native
+                isFramePlusPreRendered = false
+            }
         }
     }
 
@@ -651,6 +730,30 @@ final class PlayerState: ObservableObject {
                 }
             }
         }
+    }
+
+    private func configureLegibleOutput(for item: AVPlayerItem) {
+        let output = AVPlayerItemLegibleOutput()
+        output.suppressesPlayerRendering = true
+        output.setDelegate(self, queue: DispatchQueue.main)
+        item.add(output)
+        legibleOutput = output
+    }
+
+    private func detachLegibleOutput() {
+        if let legibleOutput {
+            legibleOutput.setDelegate(nil, queue: nil)
+            player.currentItem?.remove(legibleOutput)
+        }
+        legibleOutput = nil
+        subtitleSelectionGroup = nil
+        subtitleOptionsByID.removeAll()
+        currentSubtitleText = nil
+    }
+
+    private func loadMediaTracks(from item: AVPlayerItem) {
+        loadAudioTracks(from: item)
+        loadSubtitleTracks(from: item)
     }
 
     private func loadAudioTracks(from item: AVPlayerItem) {
@@ -709,6 +812,125 @@ final class PlayerState: ObservableObject {
         }
     }
 
+    private func loadSubtitleTracks(from item: AVPlayerItem) {
+        Task {
+            let group = try? await item.asset.loadMediaSelectionGroup(for: .legible)
+            var tracks: [MediaTrack] = []
+            var optionsByID: [String: AVMediaSelectionOption] = [:]
+
+            if let group {
+                for (index, option) in group.options.enumerated() {
+                    let id = "subtitle-\(index)"
+                    let language = option.extendedLanguageTag ?? option.locale?.identifier
+                    let label = Self.localizedMediaSelectionLabel(
+                        fallbackPrefix: "Subtitulo",
+                        index: index,
+                        displayName: option.displayName,
+                        language: language
+                    )
+
+                    tracks.append(MediaTrack(
+                        id: id,
+                        kind: .subtitle,
+                        index: index,
+                        label: label,
+                        languageCode: language
+                    ))
+                    optionsByID[id] = option
+                }
+            }
+
+            await MainActor.run {
+                self.subtitleSelectionGroup = group
+                self.subtitleOptionsByID = optionsByID
+                self.availableTracks.removeAll { $0.kind == .subtitle }
+                self.availableTracks.append(contentsOf: tracks)
+                self.selectedSubtitleTrack = nil
+                self.currentSubtitleText = nil
+
+                if let group {
+                    item.select(nil, in: group)
+                }
+            }
+        }
+    }
+
+    private func loadFrameRateFallback(from asset: AVAsset) {
+        guard sourceFrameRate == nil || sourceFrameRate == 0 else { return }
+
+        Task {
+            let tracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
+            guard let track = tracks.first,
+                  let nominalFrameRate = try? await track.load(.nominalFrameRate),
+                  nominalFrameRate.isFinite,
+                  nominalFrameRate > 1 else {
+                return
+            }
+
+            await MainActor.run {
+                if self.sourceFrameRate == nil || self.sourceFrameRate == 0 {
+                    self.sourceFrameRate = Double(nominalFrameRate)
+                }
+            }
+        }
+    }
+
+    private func applySubtitleSelection(_ track: MediaTrack?) {
+        guard let item = player.currentItem, let group = subtitleSelectionGroup else {
+            currentSubtitleText = nil
+            return
+        }
+
+        guard let track, let option = subtitleOptionsByID[track.id] else {
+            item.select(nil, in: group)
+            currentSubtitleText = nil
+            return
+        }
+
+        item.select(option, in: group)
+        currentSubtitleText = nil
+    }
+
+    private func applyVisualCompositionIfNeeded() {
+        guard let item = player.currentItem else { return }
+        applyVisualCompositionIfNeeded(to: item)
+    }
+
+    private func applyVisualCompositionIfNeeded(to item: AVPlayerItem) {
+        guard visualEnhancementsEnabled, interpolationMode == .disabled else {
+            item.videoComposition = nil
+            return
+        }
+
+        item.videoComposition = Self.visualEnhancementComposition(for: item.asset)
+    }
+
+    private nonisolated static func visualEnhancementComposition(for asset: AVAsset) -> AVVideoComposition {
+        AVMutableVideoComposition(asset: asset) { request in
+            let image = applyVisualEnhancements(to: request.sourceImage)
+            request.finish(with: image, context: nil)
+        }
+    }
+
+    nonisolated static func applyVisualEnhancements(to image: CIImage) -> CIImage {
+        let extent = image.extent
+        let color = image
+            .applyingFilter("CIColorControls", parameters: [
+                kCIInputSaturationKey: 1.18,
+                kCIInputContrastKey: 1.10,
+                kCIInputBrightnessKey: 0.015
+            ])
+            .applyingFilter("CIHighlightShadowAdjust", parameters: [
+                "inputHighlightAmount": 0.82,
+                "inputShadowAmount": 0.26
+            ])
+            .applyingFilter("CISharpenLuminance", parameters: [
+                kCIInputSharpnessKey: 0.36
+            ])
+
+        return color.cropped(to: extent)
+    }
+
     /// Applies an AVAudioMix that silences every track except `trackIndex`.
     /// This is instant and requires no re-conversion.
     private func applyAudioMix(trackIndex: Int, to item: AVPlayerItem, allTracks: [AVAssetTrack]) {
@@ -723,13 +945,11 @@ final class PlayerState: ObservableObject {
     }
 
     private func findFFmpeg() -> URL? {
-        [
+        findExecutable(named: "ffmpeg", fallbackPaths: [
             "/opt/homebrew/bin/ffmpeg",
             "/usr/local/bin/ffmpeg",
             "/usr/bin/ffmpeg"
-        ]
-        .map(URL.init(fileURLWithPath:))
-        .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+        ])
     }
 
     private static func parseFrameRate(_ rawValue: String) -> Double? {
@@ -747,19 +967,116 @@ final class PlayerState: ObservableObject {
     }
 
     private func findFFprobe() -> URL? {
-        [
+        findExecutable(named: "ffprobe", fallbackPaths: [
             "/opt/homebrew/bin/ffprobe",
             "/usr/local/bin/ffprobe",
             "/usr/bin/ffprobe"
-        ]
-        .map(URL.init(fileURLWithPath:))
-        .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+        ])
+    }
+
+    private func findExecutable(named name: String, fallbackPaths: [String]) -> URL? {
+        let bundledCandidates = bundledExecutableCandidates(named: name)
+        let fallbackCandidates = fallbackPaths.map(URL.init(fileURLWithPath:))
+        var seenPaths = Set<String>()
+
+        return (bundledCandidates + fallbackCandidates).first { url in
+            guard seenPaths.insert(url.path).inserted else { return false }
+            return FileManager.default.isExecutableFile(atPath: url.path)
+        }
+    }
+
+    private func bundledExecutableCandidates(named name: String) -> [URL] {
+        var roots: [URL] = []
+
+        for bundle in executableSearchBundles() {
+            if let resourceURL = bundle.resourceURL {
+                roots.append(resourceURL)
+                roots.append(resourceURL.appendingPathComponent("bin", isDirectory: true))
+                roots.append(resourceURL.appendingPathComponent("Tools", isDirectory: true))
+                roots.append(resourceURL.appendingPathComponent("FFmpeg", isDirectory: true))
+            }
+
+            if let executableURL = bundle.executableURL?.deletingLastPathComponent() {
+                roots.append(executableURL)
+                roots.append(executableURL.appendingPathComponent("bin", isDirectory: true))
+                roots.append(executableURL.appendingPathComponent("Tools", isDirectory: true))
+                roots.append(executableURL.appendingPathComponent("Helpers", isDirectory: true))
+            }
+        }
+
+        let contentsURL = Bundle.main.bundleURL.appendingPathComponent("Contents", isDirectory: true)
+        roots.append(contentsURL.appendingPathComponent("MacOS", isDirectory: true))
+        roots.append(contentsURL.appendingPathComponent("Helpers", isDirectory: true))
+        roots.append(contentsURL.appendingPathComponent("Resources", isDirectory: true))
+        roots.append(contentsURL.appendingPathComponent("Resources/bin", isDirectory: true))
+        roots.append(contentsURL.appendingPathComponent("Resources/Tools", isDirectory: true))
+        roots.append(contentsURL.appendingPathComponent("Resources/FFmpeg", isDirectory: true))
+
+        return roots.map { $0.appendingPathComponent(name, isDirectory: false) }
+    }
+
+    private func executableSearchBundles() -> [Bundle] {
+        var bundles = [Bundle.main]
+        #if SWIFT_PACKAGE
+        bundles.append(Bundle.module)
+        #endif
+        return bundles
+    }
+
+    nonisolated func legibleOutput(
+        _ output: AVPlayerItemLegibleOutput,
+        didOutputAttributedStrings strings: [NSAttributedString],
+        nativeSampleBuffers: [Any],
+        forItemTime itemTime: CMTime
+    ) {
+        let text = strings
+            .map { $0.string.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+
+        Task { @MainActor [weak self] in
+            self?.currentSubtitleText = text.isEmpty ? nil : text
+        }
+    }
+
+    private static func localizedMediaSelectionLabel(
+        fallbackPrefix: String,
+        index: Int,
+        displayName: String,
+        language: String?
+    ) -> String {
+        let fallback = localizedTrackLabel(prefix: fallbackPrefix, index: index, language: language)
+        let trimmedDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedDisplayName.isEmpty else {
+            return fallback
+        }
+
+        return trimmedDisplayName
+    }
+
+    private static func localizedTrackLabel(prefix: String, index: Int, language: String?) -> String {
+        guard let language, !language.isEmpty, language != "und" else {
+            return "\(prefix) \(index + 1)"
+        }
+
+        let localized = Locale.current.localizedString(forLanguageCode: language) ?? language.uppercased()
+        return "\(prefix) \(index + 1) · \(localized)"
     }
 
     private func cleanupConvertedVideo() {
-        guard let convertedVideoURL else { return }
-        try? FileManager.default.removeItem(at: convertedVideoURL)
+        if let convertedVideoURL {
+            try? FileManager.default.removeItem(at: convertedVideoURL)
+        }
         self.convertedVideoURL = nil
+        cleanupFramePlusVideo()
+    }
+
+    private func cleanupFramePlusVideo() {
+        if let framePlusVideoURL {
+            try? FileManager.default.removeItem(at: framePlusVideoURL)
+        }
+        framePlusVideoURL = nil
     }
 
     private func addTimeObserver() {

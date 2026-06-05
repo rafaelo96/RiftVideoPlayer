@@ -17,29 +17,40 @@ struct ContentView: View {
             appBackdrop
 
             if state.hasVideo {
-                RiftPlayerView(
-                    player: state.player,
-                    fpsMode: state.fpsMode,
-                    interpolationMode: state.interpolationMode,
-                    sourceFrameRate: state.sourceFrameRate,
-                    visualEnhancementsEnabled: state.visualEnhancementsEnabled
-                ) { stats in
-                    state.currentRenderingFPS = stats.renderingFPS
-                    state.isArtificialInterpolationActive = stats.isArtificialInterpolationActive
-                    state.fluxWorkingWidth = stats.fluxWorkingWidth
-                    state.fluxOpticalFlowUsage = stats.opticalFlowUsage
-                    state.fluxBlendFallbackUsage = stats.blendFallbackUsage
-                    state.rifeStatus = stats.rifeStatus
-                    state.isRIFELoaded = stats.isRIFELoaded
-                    state.rifeEnabled = stats.isRIFELoaded && state.interpolationMode != .disabled && state.interpolationMode != .motion2Intense
-                    if !stats.isRIFELoaded && state.interpolationMode != .disabled && state.interpolationMode != .motion2Intense {
-                        state.interpolationMode = .disabled
-                        state.fpsMode = .native
+                Group {
+                    if usesMetalRenderer {
+                        RiftPlayerView(
+                            player: state.player,
+                            fpsMode: state.fpsMode,
+                            interpolationMode: state.interpolationMode,
+                            sourceFrameRate: state.sourceFrameRate,
+                            visualEnhancementsEnabled: state.visualEnhancementsEnabled
+                        ) { stats in
+                            state.currentRenderingFPS = stats.renderingFPS
+                            state.isArtificialInterpolationActive = stats.isArtificialInterpolationActive
+                            state.fluxWorkingWidth = stats.fluxWorkingWidth
+                            state.fluxOpticalFlowUsage = stats.opticalFlowUsage
+                            state.fluxBlendFallbackUsage = stats.blendFallbackUsage
+                            state.rifeStatus = stats.rifeStatus
+                            state.isRIFELoaded = stats.isRIFELoaded
+                            state.rifeEnabled = stats.isRIFELoaded && state.interpolationMode != .disabled && state.interpolationMode != .motion2Intense
+                            if !stats.isRIFELoaded && state.interpolationMode != .disabled && state.interpolationMode != .motion2Intense {
+                                state.interpolationMode = .disabled
+                                state.fpsMode = .native
+                            }
+                        }
+                    } else {
+                        NativeVideoPlayerView(player: state.player)
                     }
                 }
                 .ignoresSafeArea()
                 .overlay(videoVignette)
                 .transition(.opacity.combined(with: .scale(scale: 1.01)))
+            }
+
+            if state.hasVideo, let subtitleText = state.currentSubtitleText, !subtitleText.isEmpty {
+                subtitleOverlay(subtitleText)
+                    .transition(.opacity)
             }
 
             if !state.hasVideo {
@@ -84,6 +95,10 @@ struct ContentView: View {
             let urls = notification.userInfo?["urls"] as? [URL] ?? []
             handleOpenURLs(urls)
         }
+    }
+
+    private var usesMetalRenderer: Bool {
+        state.interpolationMode != .disabled
     }
 
     private func setupMouseMonitor() {
@@ -253,6 +268,30 @@ struct ContentView: View {
         .frame(maxWidth: 880, maxHeight: 120)
         .blur(radius: 18)
         .allowsHitTesting(false)
+    }
+
+    private func subtitleOverlay(_ text: String) -> some View {
+        VStack {
+            Spacer()
+
+            Text(text)
+                .font(.system(size: 28, weight: .semibold))
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.95), radius: 4, x: 0, y: 1)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(.black.opacity(0.48))
+                }
+                .frame(maxWidth: 920)
+                .padding(.horizontal, 34)
+                .padding(.bottom, areControlsVisible ? 154 : 58)
+        }
+        .allowsHitTesting(false)
+        .animation(.easeInOut(duration: 0.18), value: areControlsVisible)
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {

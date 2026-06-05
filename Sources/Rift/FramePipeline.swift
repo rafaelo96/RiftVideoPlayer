@@ -50,6 +50,14 @@ final class AsyncFrameBuffer: @unchecked Sendable {
         return frame
     }
 
+    func peek() -> SourceVideoFrame? {
+        lock.lock()
+        guard count > 0 else { lock.unlock(); return nil }
+        let frame = buffer[readIndex]
+        lock.unlock()
+        return frame
+    }
+
     func peekNext() -> SourceVideoFrame? {
         lock.lock()
         guard count >= 2 else { lock.unlock(); return nil }

@@ -112,8 +112,8 @@ final class FramePlusMEMCEngine {
 
     private func makeParams(width: Int, height: Int, timestep: Float) -> Params {
         let downscale: UInt32 = 8
-        let blockSize: UInt32 = 16
-        let searchRadius: UInt32 = 4
+        let blockSize: UInt32 = 8
+        let searchRadius: UInt32 = 8
         let lowWidth = UInt32(max(1, (width + Int(downscale) - 1) / Int(downscale)))
         let lowHeight = UInt32(max(1, (height + Int(downscale) - 1) / Int(downscale)))
         let vectorWidth = max(1, (lowWidth + blockSize - 1) / blockSize)
@@ -130,7 +130,7 @@ final class FramePlusMEMCEngine {
             blockSize: blockSize,
             searchRadius: searchRadius,
             timestep: timestep,
-            occlusionThreshold: 0.28
+            occlusionThreshold: 0.46
         )
     }
 
