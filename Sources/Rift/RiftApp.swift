@@ -11,16 +11,11 @@ struct RiftApp: App {
 
     var body: some Scene {
         WindowGroup("Rift") {
-            if CommandLine.arguments.count > 1 {
-                EmptyView()
-                    .frame(width: 1, height: 1)
-            } else {
-                ContentView()
-                    .frame(minWidth: 780, minHeight: 480)
-                    .onAppear {
-                        AppDelegate.bringPlayerWindowToFront()
-                    }
-            }
+            ContentView()
+                .frame(minWidth: 780, minHeight: 480)
+                .onAppear {
+                    AppDelegate.bringPlayerWindowToFront()
+                }
         }
         .windowResizability(.contentMinSize)
         .commands {
@@ -32,27 +27,14 @@ struct RiftApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static var pendingOpenURLs: [URL] = []
-    private var cliWindow: NSWindow?
+    private static var fallbackWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         Self.setApplicationIcon()
         Self.bringPlayerWindowToFront()
-
-        guard CommandLine.arguments.count > 1 else { return }
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 720),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Rift"
-        window.center()
-        window.contentView = NSHostingView(rootView: ContentView())
-        window.makeKeyAndOrderFront(nil)
-        cliWindow = window
+        Self.createFallbackWindowIfNeeded()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -90,6 +72,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             NSApp.windows.first?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    @MainActor
+    private static func createFallbackWindowIfNeeded() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            guard NSApp.windows.isEmpty, fallbackWindow == nil else { return }
+
+            let rootView = ContentView()
+                .frame(minWidth: 780, minHeight: 480)
+            let hostingController = NSHostingController(rootView: rootView)
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 1120, height: 680),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Rift"
+            window.contentViewController = hostingController
+            window.center()
+            window.makeKeyAndOrderFront(nil)
+            fallbackWindow = window
             NSApp.activate(ignoringOtherApps: true)
         }
     }

@@ -26,8 +26,8 @@ final class OpticalFlowEngine: @unchecked Sendable {
     private var latestPairKey = ""
     private var latestFlowTime = CACurrentMediaTime()
     private var lastProcessingTime = CACurrentMediaTime()
-    private let minimumProcessingInterval = 0.12
-    private let maximumFlowWidth = 384
+    private let minimumProcessingInterval = 0.03
+    private let maximumFlowWidth = 512
     private let ciContext = CIContext(options: [.cacheIntermediates: false])
 
     func snapshotFlow(maxAge: TimeInterval, pairKey: String) -> OpticalFlowSnapshot? {
@@ -95,7 +95,7 @@ final class OpticalFlowEngine: @unchecked Sendable {
 
             let handler = VNImageRequestHandler(cvPixelBuffer: previousForFlow, options: [:])
             let request = VNGenerateOpticalFlowRequest(targetedCVPixelBuffer: currentForFlow, options: [:])
-            request.computationAccuracy = .low
+            request.computationAccuracy = .high
             request.outputPixelFormat = kCVPixelFormatType_TwoComponent16Half
 
             do {

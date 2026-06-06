@@ -74,11 +74,18 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             interpolationMode = .motion2Intense
         }
 
-        if let path = CommandLine.arguments.first(where: { !$0.hasPrefix("--") && $0 != CommandLine.arguments.first }) {
+        if let path = Self.launchVideoPath(from: CommandLine.arguments) {
             Task { @MainActor in
                 self.loadVideo(URL(fileURLWithPath: path))
             }
         }
+    }
+
+    private static func launchVideoPath(from arguments: [String]) -> String? {
+        arguments
+            .dropFirst()
+            .filter { !$0.hasPrefix("-") }
+            .first { FileManager.default.fileExists(atPath: $0) }
     }
 
     func cleanup() {
@@ -178,6 +185,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             isFramePlusPreparing = false
             isFramePlusPreRendered = false
             statusMessage = nil
+            startFramePlusPreparationForShortLowFPSClipIfUseful()
         }
     }
 
@@ -347,6 +355,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             let loadedDuration = try? await item.asset.load(.duration)
             await MainActor.run {
                 duration = loadedDuration?.seconds.isFinite == true ? loadedDuration?.seconds ?? 0 : 0
+                startFramePlusPreparationForShortLowFPSClipIfUseful()
             }
         }
     }
@@ -594,6 +603,25 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
     }
 
+    private func startFramePlusPreparationForShortLowFPSClipIfUseful() {
+        guard CommandLine.arguments.contains("--frameplus-hq"),
+              interpolationMode == .motion2Intense,
+              !isFramePlusPreparing,
+              !isFramePlusPreRendered,
+              let sourceFrameRate,
+              sourceFrameRate.isFinite,
+              sourceFrameRate > 0,
+              sourceFrameRate < 16 else {
+            return
+        }
+
+        let itemDuration = player.currentItem?.duration.seconds ?? 0
+        let knownDuration = duration > 0 ? duration : itemDuration
+        guard knownDuration.isFinite, knownDuration > 0, knownDuration <= 90 else { return }
+
+        startFramePlusPreparationIfUseful()
+    }
+
     private var shouldPrepareFramePlusVideo: Bool {
         guard let sourceFrameRate, sourceFrameRate.isFinite, sourceFrameRate > 0 else { return true }
         return sourceFrameRate < 55
@@ -620,9 +648,9 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     private func prepareFramePlusVideo(from sourceURL: URL) async {
         guard !isFramePlusPreparing else { return }
         guard let ffmpegURL = findFFmpeg() else {
-            statusMessage = "Frame⁺ necesita ffmpeg."
-            interpolationMode = .disabled
-            fpsMode = .native
+            statusMessage = "Frame⁺ HQ necesita ffmpeg; usando Frame⁺ en vivo."
+            isFramePlusPreparing = false
+            isFramePlusPreRendered = false
             return
         }
 
@@ -667,15 +695,13 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             sourceFrameRate = 60
             currentRenderingFPS = 60
             isArtificialInterpolationActive = true
-            let resumeTime = currentTime
+            let resumeTime = duration > 0 && currentTime >= duration - 0.5 ? 0 : currentTime
             playVideo(outputURL, displayName: "\(fileName) · Frame⁺ 60fps")
             seek(to: resumeTime)
         } else {
             cleanupFramePlusVideo()
             if interpolationMode == .motion2Intense {
-                statusMessage = "Frame⁺ no pudo preparar 60fps."
-                interpolationMode = .disabled
-                fpsMode = .native
+                statusMessage = "Frame⁺ HQ no pudo preparar 60fps; usando Frame⁺ en vivo."
                 isFramePlusPreRendered = false
             }
         }
