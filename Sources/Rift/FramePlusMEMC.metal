@@ -3,7 +3,7 @@ using namespace metal;
 
 constant uint MEMC_DOWNSCALE = 8;
 constant uint MEMC_BLOCK_SIZE = 8;
-constant int MEMC_SEARCH_RADIUS = 8;
+constant int MEMC_SEARCH_RADIUS = 16;
 
 struct MEMCParams {
     uint fullWidth;
@@ -125,9 +125,9 @@ kernel void memcFilterVectors(
 }
 
 kernel void memcWarp(
-    texture2d<float, access::read> frameA [[texture(0)]],
-    texture2d<float, access::read> frameB [[texture(1)]],
-    texture2d<half, access::read> vectorMap [[texture(2)]],
+    texture2d<float, access::sample> frameA [[texture(0)]],
+    texture2d<float, access::sample> frameB [[texture(1)]],
+    texture2d<half, access::sample> vectorMap [[texture(2)]],
     texture2d<float, access::write> output [[texture(3)]],
     constant MEMCParams& params [[buffer(0)]],
     uint2 gid [[thread_position_in_grid]]
@@ -146,7 +146,7 @@ kernel void memcWarp(
 
     float4 colorA = frameA.sample(linearSampler, sampleA);
     float4 colorB = frameB.sample(linearSampler, sampleB);
-    float4 linearBlend = mix(frameA.read(gid), frameB.read(gid), t);
+    float4 linearBlend = mix(frameA.sample(linearSampler, pos), frameB.sample(linearSampler, pos), t);
     float4 warped = mix(colorA, colorB, t);
 
     float disagreement = distance(colorA.rgb, colorB.rgb);
@@ -158,7 +158,7 @@ kernel void memcWarp(
     float edgeDistance = min(min(pos.x, float(params.fullWidth) - pos.x), min(pos.y, float(params.fullHeight) - pos.y));
     float edgeConfidence = smoothstep(0.0, 32.0, edgeDistance);
     float motionAmount = smoothstep(0.75, 6.0, length(motion));
-    float motionMix = mix(confidence, max(confidence, 0.42), motionAmount);
+    float motionMix = mix(confidence, max(confidence, 0.98), motionAmount);
     float finalMix = motionMix * edgeConfidence;
 
     output.write(mix(linearBlend, warped, finalMix), gid);

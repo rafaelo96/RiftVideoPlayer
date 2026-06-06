@@ -178,7 +178,9 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
                 float confidence = 1.0 - smoothstep(occlusionThreshold * 0.55, occlusionThreshold, disagreement);
                 float edgeDistance = min(min(dc.x - minCoord.x, maxCoord.x - dc.x), min(dc.y - minCoord.y, maxCoord.y - dc.y));
                 float edgeConfidence = smoothstep(0.0, 72.0, edgeDistance);
-                float finalMix = memcMix * confidence * edgeConfidence;
+                float motionAmount = smoothstep(1.0, maxMotion * 0.28, motionLength);
+                float motionConfidence = mix(confidence, max(confidence, 0.94), motionAmount);
+                float finalMix = memcMix * motionConfidence * edgeConfidence;
 
                 return mix(dissolved, warped, finalMix);
             }
@@ -432,15 +434,15 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
                             )
                         }
                     }
-                    if fpsMode == .flux,
-                       interpolationMode != .motion2Intense,
-                       let previousFrame,
-                       sourceFrameIndex.isMultiple(of: 3) {
-                        opticalFlowEngine.update(
-                            previousFrame: previousFrame,
-                            currentFrame: frame,
-                            pairKey: pairKey(previous: previousFrameTime, next: frameTime)
-                        )
+                    if fpsMode == .flux, let previousFrame {
+                        let shouldUpdateFlow = interpolationMode == .motion2Intense || sourceFrameIndex.isMultiple(of: 3)
+                        if shouldUpdateFlow {
+                            opticalFlowEngine.update(
+                                previousFrame: previousFrame,
+                                currentFrame: frame,
+                                pairKey: pairKey(previous: previousFrameTime, next: frameTime)
+                            )
+                        }
                     }
                     if fpsMode == .flux,
                        interpolationMode != .disabled,
@@ -863,7 +865,9 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         }
 
         let pair: (previous: SourceVideoFrame, next: SourceVideoFrame, targetSeconds: Double)
-        if interpolationMode == .motion2Intense, let livePair = liveInterpolationPair {
+        if interpolationMode == .motion2Intense, let bufferedPair = sourceFramePair(for: itemTime) {
+            pair = bufferedPair
+        } else if interpolationMode == .motion2Intense, let livePair = liveInterpolationPair {
             let phase = min(max((hostTime - livePair.startHostTime) / livePair.duration, 0), 0.985)
             pair = (
                 previous: livePair.previous,
@@ -914,13 +918,45 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         let interpolationWidth = fluxInterpolationWidth(for: pair.previous.pixelBuffer)
         let prevCI = scaledToWidth(CIImage(cvPixelBuffer: pair.previous.pixelBuffer), width: interpolationWidth)
         let nextCI = scaledToWidth(CIImage(cvPixelBuffer: pair.next.pixelBuffer), width: interpolationWidth)
+        let key = pairKey(previous: pair.previous.time, next: pair.next.time)
 
         if interpolationMode == .motion2Intense {
+            if let flow = opticalFlowEngine.snapshotFlow(maxAge: 1.0, pairKey: key),
+               let flowImage = opticalFlowImage(
+                    previousImage: prevCI,
+                    currentImage: nextCI,
+                    flow: flow,
+                    amount: t
+               ) {
+                return InterpolatedImage(
+                    image: flowImage,
+                    isInterpolated: true,
+                    needsDetailBoost: false,
+                    usedOpticalFlow: true
+                )
+            }
+
+            if let memcImage = interpolateFrameMetal(
+                current: pair.previous.pixelBuffer,
+                currentTime: pair.previous.time,
+                next: pair.next.pixelBuffer,
+                nextTime: pair.next.time,
+                timestep: Float(t),
+                commandBuffer: commandBuffer
+            ) {
+                return InterpolatedImage(
+                    image: memcImage,
+                    isInterpolated: true,
+                    needsDetailBoost: false,
+                    usedOpticalFlow: true
+                )
+            }
+
             let result = interpolatedImage(
                 previousImage: prevCI,
                 currentImage: nextCI,
                 amount: t,
-                pairKey: pairKey(previous: pair.previous.time, next: pair.next.time),
+                pairKey: key,
                 allowOpticalFlow: false
             )
 
@@ -929,22 +965,6 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
                 isInterpolated: true,
                 needsDetailBoost: false,
                 usedOpticalFlow: false
-            )
-        }
-
-        if let memcImage = interpolateFrameMetal(
-                current: pair.previous.pixelBuffer,
-                currentTime: pair.previous.time,
-                next: pair.next.pixelBuffer,
-                nextTime: pair.next.time,
-                timestep: Float(t),
-                commandBuffer: commandBuffer
-           ) {
-            return InterpolatedImage(
-                image: memcImage,
-                isInterpolated: true,
-                needsDetailBoost: false,
-                usedOpticalFlow: true
             )
         }
 
@@ -961,7 +981,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             previousImage: prevCI,
             currentImage: nextCI,
             amount: t,
-            pairKey: pairKey(previous: pair.previous.time, next: pair.next.time),
+            pairKey: key,
             allowOpticalFlow: interpolationMode != .motion2Intense
         )
 
@@ -1170,17 +1190,18 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
     }
 
     private func estimatedSourceFrameDuration() -> Double {
-        let bufferFrames = 1.25
+        let bufferFrames = interpolationMode == .motion2Intense ? 1.0 : 1.25
+        let maximumDelay = interpolationMode == .motion2Intense ? 0.24 : 0.10
         if sourceFrames.count >= 2 {
             let newest = sourceFrames[sourceFrames.count - 1].time.seconds
             let previous = sourceFrames[sourceFrames.count - 2].time.seconds
             let delta = newest - previous
             if delta.isFinite, delta > 0 {
-                return min(delta * bufferFrames, 0.10)
+                return min(delta * bufferFrames, maximumDelay)
             }
         }
         if let sourceFrameRate, sourceFrameRate.isFinite, sourceFrameRate > 0 {
-            return min(bufferFrames / sourceFrameRate, 0.10)
+            return min(bufferFrames / sourceFrameRate, maximumDelay)
         }
         return bufferFrames / 24.0
     }
@@ -1393,12 +1414,8 @@ private struct MEMCImage {
 private enum MEMCIntensity {
     case high
 
-    // FIX: Lower occlusionThreshold (0.50→0.22) so the warp is applied more
-    // aggressively — the old value was so permissive that even moderate color
-    // disagreement (typical for textured surfaces) was penalized, reverting to
-    // crossfade. Raise mix to 0.88 for stronger MEMC contribution.
-    var maxMotion: Double { 48 }
-    var warpStrength: Double { 0.72 }
-    var mix: Double { 0.88 }
-    var occlusionThreshold: Double { 0.22 }
+    var maxMotion: Double { 320 }
+    var warpStrength: Double { 1.0 }
+    var mix: Double { 0.96 }
+    var occlusionThreshold: Double { 0.36 }
 }
