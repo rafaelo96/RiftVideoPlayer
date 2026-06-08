@@ -149,6 +149,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
     private let rifeWorkingMaxWidth: CGFloat = 1920
     private let rifeWorkingMaxHeight: CGFloat = 1080
     private let memcIntensity = MEMCIntensity.high
+    private let renderColorSpace: CGColorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
     private lazy var memcKernel: CIKernel? = {
         CIKernel(source:
             """
@@ -278,14 +279,19 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
 
         if interpolationMode == .motion2Intense {
             view.preferredFramesPerSecond = framePlusRenderFPS(for: view)
-            view.isPaused = false
-            view.enableSetNeedsDisplay = false
         }
         view.delegate = self
 
         if commandQueue == nil, let device = view.device {
             commandQueue = device.makeCommandQueue()
-            ciContext = CIContext(mtlDevice: device, options: [.cacheIntermediates: false])
+            ciContext = CIContext(
+                mtlDevice: device,
+                options: [
+                    .cacheIntermediates: false,
+                    .workingColorSpace: renderColorSpace,
+                    .outputColorSpace: renderColorSpace
+                ]
+            )
             var cache: CVMetalTextureCache?
             CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, device, nil, &cache)
             textureCache = cache
@@ -299,7 +305,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
 
         attachOutputIfNeeded(to: player.currentItem)
         stopFramePlusPrefetcher()
-        if interpolationMode != .motion2Intense {
+        if interpolationMode != .disabled, interpolationMode != .motion2Intense {
             loadRIFEIfNeeded()
         }
         setupObservations(for: player, in: view)
@@ -366,18 +372,34 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
                 }
             }
         }
+        rateObservation = player.observe(\.timeControlStatus, options: [.new, .initial]) { [weak self] player, _ in
+            Task { @MainActor in
+                guard let self, let view = self.mtkView else { return }
+                self.updateRenderingState(player: player, view: view)
+            }
+        }
+        itemObservation = player.observe(\.currentItem, options: [.new]) { [weak self] player, _ in
+            Task { @MainActor in
+                guard let self, let view = self.mtkView else { return }
+                self.attachOutputIfNeeded(to: player.currentItem)
+                self.updateRenderingState(player: player, view: view)
+            }
+        }
         attachOutputIfNeeded(to: player.currentItem)
         updateRenderingState(player: player, view: view)
     }
 
     private func updateRenderingState(player: AVPlayer, view: MetalVideoView) {
+        let isPlaying = player.timeControlStatus == .playing
         if interpolationMode == .motion2Intense, player.currentItem != nil {
             view.preferredFramesPerSecond = framePlusRenderFPS(for: view)
-            view.isPaused = false
-            view.enableSetNeedsDisplay = false
+            view.isPaused = !isPlaying
+            view.enableSetNeedsDisplay = !isPlaying
+            if !isPlaying {
+                view.setNeedsDisplay(view.bounds)
+            }
             return
         }
-        let isPlaying = player.timeControlStatus == .playing
         if isPlaying {
             view.isPaused = false
             view.enableSetNeedsDisplay = false
@@ -400,10 +422,12 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         guard let drawable = view.currentDrawable,
               let commandBuffer = commandQueue?.makeCommandBuffer(),
               let ciContext,
-              let output = videoOutput else { return }
+              let output = videoOutput,
+              let player else { return }
 
         let hostTime = CACurrentMediaTime()
-        let itemTime = output.itemTime(forHostTime: hostTime)
+        let isPlaying = player.timeControlStatus == .playing
+        let itemTime = isPlaying ? output.itemTime(forHostTime: hostTime) : player.currentTime()
 
         if output.hasNewPixelBuffer(forItemTime: itemTime) {
             var displayTime = CMTime.invalid
@@ -435,7 +459,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
                         }
                     }
                     if fpsMode == .flux, let previousFrame {
-                        let shouldUpdateFlow = interpolationMode == .motion2Intense || sourceFrameIndex.isMultiple(of: 3)
+                        let shouldUpdateFlow = interpolationMode != .motion2Intense && sourceFrameIndex.isMultiple(of: 3)
                         if shouldUpdateFlow {
                             opticalFlowEngine.update(
                                 previousFrame: previousFrame,
@@ -495,7 +519,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             to: drawable.texture,
             commandBuffer: commandBuffer,
             bounds: CGRect(origin: .zero, size: view.drawableSize),
-            colorSpace: CGColorSpaceCreateDeviceRGB()
+            colorSpace: renderColorSpace
         )
         commandBuffer.present(drawable)
         commandBuffer.commit()
@@ -580,21 +604,21 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
                     // Fallback: dissolve suave entre los dos frames disponibles
                     let alpha = 0.5 as Float
                     let blended = fastBlendKernel?.apply(
-                        extent: CIImage(cvPixelBuffer: nextFrame.pixelBuffer).extent,
+                        extent: ciImage(from: nextFrame.pixelBuffer).extent,
                         roiCallback: { _, rect in rect },
                         arguments: [
-                            CIImage(cvPixelBuffer: currentBuffer),
-                            CIImage(cvPixelBuffer: nextFrame.pixelBuffer),
+                            ciImage(from: currentBuffer),
+                            ciImage(from: nextFrame.pixelBuffer),
                             alpha
                         ]
                     )
-                    renderedImage = blended ?? CIImage(cvPixelBuffer: currentBuffer)
+                    renderedImage = blended ?? ciImage(from: currentBuffer)
                     isInterpolated = blended != nil
                     framePlusFallbackCount += 1
                 }
             } else {
                 // Sin siguiente frame disponible aún: repetir held
-                renderedImage = CIImage(cvPixelBuffer: currentBuffer)
+                renderedImage = ciImage(from: currentBuffer)
                 framePlusFallbackCount += 1
             }
         } else {
@@ -603,10 +627,10 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             if let nextFrame = frameBuffer.dequeue() {
                 framePlusHeldFrame = nextFrame.pixelBuffer
                 framePlusHeldTime = nextFrame.time
-                renderedImage = CIImage(cvPixelBuffer: nextFrame.pixelBuffer)
+                renderedImage = ciImage(from: nextFrame.pixelBuffer)
             } else {
                 // Buffer vacío — repetir el held actual
-                renderedImage = CIImage(cvPixelBuffer: currentBuffer)
+                renderedImage = ciImage(from: currentBuffer)
             }
             framePlusUniqueFrameCount += 1
         }
@@ -629,7 +653,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             to: drawable.texture,
             commandBuffer: commandBuffer,
             bounds: CGRect(origin: .zero, size: view.drawableSize),
-            colorSpace: CGColorSpaceCreateDeviceRGB()
+            colorSpace: renderColorSpace
         )
         commandBuffer.present(drawable)
         commandBuffer.commit()
@@ -720,7 +744,8 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             return nil
         }
 
-        return CIImage(cvPixelBuffer: pixelBuffer)
+        propagateColorAttachments(from: next, to: pixelBuffer)
+        return ciImage(from: pixelBuffer, fallbackSource: next)
     }
 
     // Helper para renderizar negro sin código duplicado
@@ -735,7 +760,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             to: drawable.texture,
             commandBuffer: commandBuffer,
             bounds: CGRect(origin: .zero, size: size),
-            colorSpace: CGColorSpaceCreateDeviceRGB()
+            colorSpace: renderColorSpace
         )
         commandBuffer.present(drawable)
         commandBuffer.commit()
@@ -857,7 +882,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         }
         guard fpsMode == .flux else {
             return InterpolatedImage(
-                image: CIImage(cvPixelBuffer: latestSourceFrame.pixelBuffer),
+                image: ciImage(from: latestSourceFrame.pixelBuffer),
                 isInterpolated: false,
                 needsDetailBoost: false,
                 usedOpticalFlow: false
@@ -878,7 +903,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             pair = bufferedPair
         } else {
             return InterpolatedImage(
-                image: CIImage(cvPixelBuffer: latestSourceFrame.pixelBuffer),
+                image: ciImage(from: latestSourceFrame.pixelBuffer),
                 isInterpolated: false,
                 needsDetailBoost: false,
                 usedOpticalFlow: false
@@ -888,7 +913,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         let frameDuration = pair.next.time.seconds - pair.previous.time.seconds
         guard frameDuration.isFinite, frameDuration > 0 else {
             return InterpolatedImage(
-                image: CIImage(cvPixelBuffer: latestSourceFrame.pixelBuffer),
+                image: ciImage(from: latestSourceFrame.pixelBuffer),
                 isInterpolated: false,
                 needsDetailBoost: false,
                 usedOpticalFlow: false
@@ -899,7 +924,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
 
         if t <= 0.001 {
             return InterpolatedImage(
-                image: CIImage(cvPixelBuffer: pair.previous.pixelBuffer),
+                image: ciImage(from: pair.previous.pixelBuffer),
                 isInterpolated: false,
                 needsDetailBoost: false,
                 usedOpticalFlow: false
@@ -908,7 +933,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
 
         if t >= 0.999 {
             return InterpolatedImage(
-                image: CIImage(cvPixelBuffer: pair.next.pixelBuffer),
+                image: ciImage(from: pair.next.pixelBuffer),
                 isInterpolated: false,
                 needsDetailBoost: false,
                 usedOpticalFlow: false
@@ -916,26 +941,11 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         }
 
         let interpolationWidth = fluxInterpolationWidth(for: pair.previous.pixelBuffer)
-        let prevCI = scaledToWidth(CIImage(cvPixelBuffer: pair.previous.pixelBuffer), width: interpolationWidth)
-        let nextCI = scaledToWidth(CIImage(cvPixelBuffer: pair.next.pixelBuffer), width: interpolationWidth)
+        let prevCI = scaledToWidth(ciImage(from: pair.previous.pixelBuffer), width: interpolationWidth)
+        let nextCI = scaledToWidth(ciImage(from: pair.next.pixelBuffer), width: interpolationWidth)
         let key = pairKey(previous: pair.previous.time, next: pair.next.time)
 
         if interpolationMode == .motion2Intense {
-            if let flow = opticalFlowEngine.snapshotFlow(maxAge: 1.0, pairKey: key),
-               let flowImage = opticalFlowImage(
-                    previousImage: prevCI,
-                    currentImage: nextCI,
-                    flow: flow,
-                    amount: t
-               ) {
-                return InterpolatedImage(
-                    image: flowImage,
-                    isInterpolated: true,
-                    needsDetailBoost: false,
-                    usedOpticalFlow: true
-                )
-            }
-
             if let memcImage = interpolateFrameMetal(
                 current: pair.previous.pixelBuffer,
                 currentTime: pair.previous.time,
@@ -952,16 +962,14 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
                 )
             }
 
-            let result = interpolatedImage(
-                previousImage: prevCI,
-                currentImage: nextCI,
-                amount: t,
-                pairKey: key,
-                allowOpticalFlow: false
-            )
-
             return InterpolatedImage(
-                image: result.image,
+                image: interpolatedImage(
+                    previousImage: prevCI,
+                    currentImage: nextCI,
+                    amount: t,
+                    pairKey: key,
+                    allowOpticalFlow: false
+                ).image,
                 isInterpolated: true,
                 needsDetailBoost: false,
                 usedOpticalFlow: false
@@ -1097,7 +1105,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             kCVPixelFormatType_32BGRA, attributes as CFDictionary, &output
         ) == kCVReturnSuccess, let output else { return nil }
 
-        let image = CIImage(cvPixelBuffer: pixelBuffer)
+        let image = ciImage(from: pixelBuffer)
             .cropped(to: CGRect(x: 0, y: 0, width: sourceWidth, height: sourceHeight))
         ciContext?.render(image, to: output)
         return output
@@ -1112,7 +1120,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
               !rifeFrameCache.isEmpty else { return nil }
         let timestep = nearestRIFETimestep(to: amount)
         guard let frame = rifeFrameCache[timestep] else { return nil }
-        return CIImage(cvPixelBuffer: frame)
+        return ciImage(from: frame)
     }
 
     private func desiredRIFETimesteps() -> [Float] {
@@ -1276,7 +1284,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
 
     private func detectSceneChangeIfNeeded(_ pixelBuffer: CVPixelBuffer) {
         guard sourceFrameIndex.isMultiple(of: 6) else { return }
-        let image = CIImage(cvPixelBuffer: pixelBuffer)
+        let image = ciImage(from: pixelBuffer)
         let extent = image.extent
         guard let averageFilter = CIFilter(name: "CIAreaAverage") else { return }
         averageFilter.setValue(image, forKey: kCIInputImageKey)
@@ -1289,7 +1297,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             rowBytes: 4,
             bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
             format: .RGBA8,
-            colorSpace: CGColorSpaceCreateDeviceRGB()
+            colorSpace: renderColorSpace
         )
         let luma = (0.2126 * Double(pixel[0]) + 0.7152 * Double(pixel[1]) + 0.0722 * Double(pixel[2])) / 255.0
         averageLumaAccumulator += luma
@@ -1352,6 +1360,39 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
 
     private func applyVisualEnhancements(_ image: CIImage) -> CIImage {
         PlayerState.applyVisualEnhancements(to: image)
+    }
+
+    private func ciImage(from pixelBuffer: CVPixelBuffer, fallbackSource: CVPixelBuffer? = nil) -> CIImage {
+        let resolvedColorSpace = self.colorSpace(for: pixelBuffer)
+            ?? fallbackSource.flatMap { self.colorSpace(for: $0) }
+            ?? renderColorSpace
+        return CIImage(cvPixelBuffer: pixelBuffer, options: [.colorSpace: resolvedColorSpace])
+    }
+
+    private func colorSpace(for pixelBuffer: CVPixelBuffer) -> CGColorSpace? {
+        if let value = copyAttachment(from: pixelBuffer, key: kCVImageBufferCGColorSpaceKey),
+           CFGetTypeID(value) == CGColorSpace.typeID {
+            return (value as! CGColorSpace)
+        }
+
+        if let value = copyAttachment(from: pixelBuffer, key: kCVImageBufferColorPrimariesKey),
+           let primaries = value as? String,
+           primaries == (kCVImageBufferColorPrimaries_ITU_R_709_2 as String) {
+            return CGColorSpace(name: CGColorSpace.itur_709)
+        }
+
+        return nil
+    }
+
+    private func propagateColorAttachments(from source: CVPixelBuffer, to destination: CVPixelBuffer) {
+        CVBufferPropagateAttachments(source, destination)
+        if copyAttachment(from: destination, key: kCVImageBufferCGColorSpaceKey) == nil {
+            CVBufferSetAttachment(destination, kCVImageBufferCGColorSpaceKey, renderColorSpace, .shouldPropagate)
+        }
+    }
+
+    private func copyAttachment(from pixelBuffer: CVPixelBuffer, key: CFString) -> CFTypeRef? {
+        CVBufferCopyAttachment(pixelBuffer, key, nil)
     }
 
     private func aspectFit(_ image: CIImage, in drawableSize: CGSize) -> CIImage {
