@@ -18,7 +18,9 @@ struct ContentView: View {
 
             if state.hasVideo {
                 Group {
-                    if usesMetalRenderer {
+                    if state.playbackBackend == .directFFmpeg, let directPlaybackURL = state.directPlaybackURL {
+                        DirectFFmpegPlayerView(url: directPlaybackURL, state: state)
+                    } else if usesMetalRenderer {
                         RiftPlayerView(
                             player: state.player,
                             fpsMode: state.fpsMode,
@@ -98,7 +100,8 @@ struct ContentView: View {
     }
 
     private var usesMetalRenderer: Bool {
-        state.interpolationMode != .disabled
+        // Keep disabled and Frame+ playback on the same color pipeline.
+        !state.usesNativeVideoLayer
     }
 
     private func setupMouseMonitor() {

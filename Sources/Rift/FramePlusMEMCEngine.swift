@@ -83,7 +83,7 @@ final class FramePlusMEMCEngine {
             return library
         }
 
-        if let url = Bundle.module.url(forResource: "FramePlusMEMC", withExtension: "metal") {
+        if let url = ResourceLocator.url(forResource: "FramePlusMEMC", withExtension: "metal") {
             let source = try String(contentsOf: url)
             return try device.makeLibrary(source: source, options: nil)
         }
@@ -111,9 +111,9 @@ final class FramePlusMEMCEngine {
     }
 
     private func makeParams(width: Int, height: Int, timestep: Float) -> Params {
-        let downscale: UInt32 = 8
-        let blockSize: UInt32 = 8
-        let searchRadius: UInt32 = 16
+        let downscale: UInt32 = 4
+        let blockSize: UInt32 = 4
+        let searchRadius: UInt32 = 12
         let lowWidth = UInt32(max(1, (width + Int(downscale) - 1) / Int(downscale)))
         let lowHeight = UInt32(max(1, (height + Int(downscale) - 1) / Int(downscale)))
         let vectorWidth = max(1, (lowWidth + blockSize - 1) / blockSize)
@@ -130,7 +130,7 @@ final class FramePlusMEMCEngine {
             blockSize: blockSize,
             searchRadius: searchRadius,
             timestep: timestep,
-            occlusionThreshold: 0.62
+            occlusionThreshold: 0.40
         )
     }
 

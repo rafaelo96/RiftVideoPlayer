@@ -102,18 +102,11 @@ final class RIFECoreMLInterpolator {
             return environmentURL
         }
 
-        let bundles = Self.modelSearchBundles()
         let extensions = ["mlmodelc", "mlpackage", "mlmodel"]
 
-        for bundle in bundles {
-            for ext in extensions {
-                if let url = bundle.url(forResource: "RIFE", withExtension: ext) {
-                    return url
-                }
-
-                if let url = bundle.url(forResource: "RIFE", withExtension: ext, subdirectory: "Resources") {
-                    return url
-                }
+        for ext in extensions {
+            if let url = ResourceLocator.url(forResource: "RIFE", withExtension: ext) {
+                return url
             }
         }
 
@@ -130,12 +123,4 @@ final class RIFECoreMLInterpolator {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
-    private static func modelSearchBundles() -> [Bundle] {
-        var bundles: [Bundle] = []
-        #if SWIFT_PACKAGE
-        bundles.append(Bundle.module)
-        #endif
-        bundles.append(Bundle.main)
-        return bundles
-    }
 }

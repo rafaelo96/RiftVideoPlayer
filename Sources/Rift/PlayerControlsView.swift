@@ -3,6 +3,9 @@ import SwiftUI
 struct PlayerControlsView: View {
     @ObservedObject var state: PlayerState
 
+    @State private var isDraggingSlider = false
+    @State private var dragSliderValue: Double = 0
+
     var body: some View {
         LiquidGlassPanel(cornerRadius: 18) {
             VStack(spacing: 8) {
@@ -37,15 +40,23 @@ struct PlayerControlsView: View {
 
     private var timeline: some View {
         HStack(spacing: 10) {
-            Text(state.formattedTime(state.currentTime))
+            Text(state.formattedTime(isDraggingSlider ? dragSliderValue : state.currentTime))
                 .frame(width: 62, alignment: .leading)
 
             Slider(
                 value: Binding(
-                    get: { state.currentTime },
-                    set: { state.seek(to: $0) }
+                    get: { isDraggingSlider ? dragSliderValue : state.currentTime },
+                    set: { dragSliderValue = $0 }
                 ),
-                in: 0...max(state.duration, 1)
+                in: 0...max(state.duration, 1),
+                onEditingChanged: { editing in
+                    isDraggingSlider = editing
+                    if editing {
+                        dragSliderValue = state.currentTime
+                    } else {
+                        state.seek(to: dragSliderValue)
+                    }
+                }
             )
             .tint(accentColor)
 

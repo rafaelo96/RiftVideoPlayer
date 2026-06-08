@@ -1,7 +1,13 @@
 import AVFoundation
 import AppKit
+import CryptoKit
 import SwiftUI
 import UniformTypeIdentifiers
+
+enum PlaybackBackend {
+    case avFoundation
+    case directFFmpeg
+}
 
 @MainActor
 final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPushDelegate {
@@ -43,17 +49,38 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     @Published var currentSubtitleText: String?
     @Published var hdrMetadata: HDRMetadata?
     @Published var isHDRContent = false
+    @Published var playbackBackend: PlaybackBackend = .avFoundation
+    @Published var directPlaybackURL: URL?
+    @Published var usesNativeVideoLayer = false
 
     private var timeObserver: Any?
     private var itemStatusObservation: NSKeyValueObservation?
     private var legibleOutput: AVPlayerItemLegibleOutput?
+    private var audioSelectionGroup: AVMediaSelectionGroup?
+    private var audioOptionsByIndex: [Int: AVMediaSelectionOption] = [:]
     private var subtitleSelectionGroup: AVMediaSelectionGroup?
     private var subtitleOptionsByID: [String: AVMediaSelectionOption] = [:]
     private var conversionProcess: Process?
     private var convertedVideoURL: URL?
+    private var convertedVideoDirectoryURL: URL?
+    private var convertedVideoShouldCleanup = true
+    private var hlsServer: LocalHLSHTTPServer?
+    private var hlsPlaylistUpdateTask: Task<Void, Never>?
+    private var hlsSourcePlaylistURL: URL?
+    private var hlsPlaybackPlaylistURL: URL?
+    private var hlsMinimumRevealDuration: TimeInterval = 0
+    private var hlsPlaybackOffset: Double = 0
+    private var hlsSeekTask: Task<Void, Never>?
+    private var hlsShouldResumePlayback = false
+    private var cachedSourceMetadataURL: URL?
+    private var cachedSourceStreams: [StreamInfo] = []
+    private var cachedSourceDuration: Double?
     private var framePlusVideoURL: URL?
     private var originalVideoURL: URL?
     private var playbackSourceURL: URL?
+    private var knownPlaybackDuration: Double?
+    private var attemptedCompatibleFallback = false
+    private weak var directPlaybackController: DirectFFmpegPlaybackControlling?
     private let rates: [Float] = [1.0, 1.25, 1.5, 2.0]
     private let containerFormatsNeedingConversion: Set<String> = ["mkv", "webm", "avi", "flv", "wmv", "ts", "m2ts"]
 
@@ -67,6 +94,8 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     override init() {
         super.init()
         player.volume = Float(volume)
+        player.automaticallyWaitsToMinimizeStalling = true
+        player.actionAtItemEnd = .none
         addTimeObserver()
 
         if CommandLine.arguments.contains("--fps=60") {
@@ -90,6 +119,16 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
     func cleanup() {
         player.pause()
+        directPlaybackController?.shutdown()
+        directPlaybackController = nil
+        directPlaybackURL = nil
+        playbackBackend = .avFoundation
+        usesNativeVideoLayer = false
+        knownPlaybackDuration = nil
+        hlsPlaybackOffset = 0
+        cachedSourceMetadataURL = nil
+        cachedSourceStreams = []
+        cachedSourceDuration = nil
         detachLegibleOutput()
         player.replaceCurrentItem(with: nil)
         isPlaying = false
@@ -104,11 +143,25 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
         conversionProcess?.terminate()
         conversionProcess = nil
+        hlsSeekTask?.cancel()
+        hlsSeekTask = nil
+        hlsShouldResumePlayback = false
         itemStatusObservation = nil
         cleanupConvertedVideo()
     }
 
     func togglePlay() {
+        if playbackBackend == .directFFmpeg {
+            if isPlaying {
+                directPlaybackController?.pause()
+                isPlaying = false
+            } else {
+                directPlaybackController?.play()
+                isPlaying = true
+            }
+            return
+        }
+
         guard player.currentItem != nil else { return }
 
         if isPlaying {
@@ -124,6 +177,19 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         let boundedSeconds = duration > 0
             ? max(0, min(seconds, duration))
             : max(0, seconds)
+
+        if playbackBackend == .directFFmpeg {
+            directPlaybackController?.seek(to: boundedSeconds)
+            currentTime = boundedSeconds
+            return
+        }
+
+        if playbackSourceURL?.scheme?.lowercased().hasPrefix("http") == true {
+            seekHLS(to: boundedSeconds)
+            currentTime = boundedSeconds
+            return
+        }
+
         let time = CMTime(seconds: boundedSeconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
         currentTime = boundedSeconds
@@ -135,6 +201,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
     func setVolume(_ value: Double) {
         volume = max(0, min(value, 1))
+        directPlaybackController?.setVolume(volume)
         player.volume = Float(volume)
     }
 
@@ -142,6 +209,11 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         // Cycles through the exact speed states requested by the UI spec.
         let currentIndex = rates.firstIndex(of: playbackRate) ?? 0
         playbackRate = rates[(currentIndex + 1) % rates.count]
+
+        if playbackBackend == .directFFmpeg {
+            directPlaybackController?.setPlaybackRate(playbackRate)
+            return
+        }
 
         if isPlaying {
             player.rate = playbackRate
@@ -155,6 +227,20 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     }
 
     func setInterpolationMode(_ mode: VideoInterpolationPipeline.InterpolationMode) {
+        if playbackBackend == .directFFmpeg {
+            if mode == .disabled {
+                interpolationMode = .disabled
+                fpsMode = .native
+                isArtificialInterpolationActive = false
+                statusMessage = nil
+            } else {
+                switchDirectPlaybackToCompatible {
+                    self.setInterpolationMode(mode)
+                }
+            }
+            return
+        }
+
         let requiresRIFE = mode == .rife2x || mode == .rife4x || mode == .rifeAdaptive
         guard mode == .disabled || mode == .motion2Intense || (requiresRIFE && isRIFELoaded) else {
             interpolationMode = .disabled
@@ -192,6 +278,10 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     func selectPipelineTrack(_ track: MediaTrack?) {
         guard let track else {
             selectedSubtitleTrack = nil
+            if playbackBackend == .directFFmpeg {
+                directPlaybackController?.selectSubtitleTrack(nil)
+                return
+            }
             applySubtitleSelection(nil)
             return
         }
@@ -201,6 +291,10 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             selectedAudioTrack = track
         case .subtitle:
             selectedSubtitleTrack = track
+            if playbackBackend == .directFFmpeg {
+                directPlaybackController?.selectSubtitleTrack(track.index)
+                return
+            }
             applySubtitleSelection(track)
         case .video:
             break
@@ -209,17 +303,41 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
     func selectAudioTrack(_ index: Int) {
         guard index < audioTracks.count else { return }
+        if playbackBackend == .directFFmpeg {
+            selectedAudioTrackIndex = index
+            selectedAudioTrack = availableTracks.first { $0.kind == .audio && $0.index == index }
+            directPlaybackController?.selectAudioTrack(index)
+            return
+        }
+
         guard let item = player.currentItem else { return }
+        selectedAudioTrackIndex = index
+        selectedAudioTrack = availableTracks.first { $0.kind == .audio && $0.index == index }
+
+        if let audioSelectionGroup,
+           let option = audioOptionsByIndex[index] {
+            item.select(option, in: audioSelectionGroup)
+            item.audioMix = nil
+            return
+        }
+
         Task {
             guard let allTracks = try? await item.asset.loadTracks(withMediaType: .audio) else { return }
             await MainActor.run {
-                self.selectedAudioTrackIndex = index
                 self.applyAudioMix(trackIndex: index, to: item, allTracks: allTracks)
             }
         }
     }
 
     func toggleVisualEnhancements() {
+        if playbackBackend == .directFFmpeg {
+            switchDirectPlaybackToCompatible {
+                self.visualEnhancementsEnabled = true
+                self.applyVisualCompositionIfNeeded()
+            }
+            return
+        }
+
         visualEnhancementsEnabled.toggle()
         applyVisualCompositionIfNeeded()
     }
@@ -254,10 +372,25 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         self.url = url
         originalVideoURL = url
         playbackSourceURL = nil
+        attemptedCompatibleFallback = false
+        directPlaybackController?.shutdown()
+        directPlaybackURL = nil
+        playbackBackend = .avFoundation
+        usesNativeVideoLayer = false
+        knownPlaybackDuration = nil
+        hlsPlaybackOffset = 0
+        cachedSourceMetadataURL = nil
+        cachedSourceStreams = []
+        cachedSourceDuration = nil
+        player.pause()
+        player.replaceCurrentItem(with: nil)
         isFramePlusPreparing = false
         isFramePlusPreRendered = false
         conversionProcess?.terminate()
         conversionProcess = nil
+        hlsSeekTask?.cancel()
+        hlsSeekTask = nil
+        hlsShouldResumePlayback = false
         cleanupConvertedVideo()
 
         videoCodec = nil
@@ -295,6 +428,98 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
     }
 
+    private func loadDirectVideo(_ url: URL) {
+        detachLegibleOutput()
+        cleanupConvertedVideo()
+        playbackBackend = .directFFmpeg
+        directPlaybackURL = url
+        playbackSourceURL = url
+        fileName = url.lastPathComponent
+        hasVideo = true
+        isPlaying = false
+        currentTime = 0
+        duration = 0
+        interpolationMode = .disabled
+        fpsMode = .native
+        visualEnhancementsEnabled = false
+        statusMessage = "Abriendo MKV directo..."
+
+        Task { @MainActor in
+            await prepareVideoMetadata(for: url)
+        }
+    }
+
+    private func switchDirectPlaybackToCompatible(configure: @escaping () -> Void) {
+        guard playbackBackend == .directFFmpeg,
+              let sourceURL = directPlaybackURL ?? originalVideoURL else {
+            configure()
+            return
+        }
+
+        let resumeTime = currentTime
+        let shouldResume = isPlaying
+
+        statusMessage = "Cambiando a modo compatible..."
+        directPlaybackController?.shutdown()
+        directPlaybackController = nil
+        directPlaybackURL = nil
+        playbackBackend = .avFoundation
+        usesNativeVideoLayer = false
+        playbackSourceURL = nil
+        hlsShouldResumePlayback = shouldResume
+        isPlaying = shouldResume
+
+        configure()
+
+        Task { @MainActor in
+            await convertAndLoadVideo(sourceURL, allowFastRemux: true, startAt: resumeTime)
+        }
+    }
+
+    func attachDirectPlaybackController(_ controller: DirectFFmpegPlaybackControlling) {
+        directPlaybackController = controller
+        controller.setVolume(volume)
+        controller.setPlaybackRate(playbackRate)
+    }
+
+    func detachDirectPlaybackController(_ controller: DirectFFmpegPlaybackControlling) {
+        if (directPlaybackController as AnyObject?) === controller {
+            directPlaybackController = nil
+        }
+    }
+
+    func directPlaybackDidLoadTracks(
+        audioTracks: [AudioTrack],
+        availableTracks: [MediaTrack],
+        selectedAudioIndex: Int,
+        selectedSubtitleTrack: MediaTrack?,
+        nominalFrameRate: Float
+    ) {
+        guard playbackBackend == .directFFmpeg else { return }
+        self.audioTracks = audioTracks
+        self.availableTracks = availableTracks
+        self.selectedAudioTrackIndex = selectedAudioIndex
+        self.selectedAudioTrack = availableTracks.first { $0.kind == .audio && $0.index == selectedAudioIndex }
+        self.selectedSubtitleTrack = selectedSubtitleTrack
+        if nominalFrameRate > 0 {
+            self.sourceFrameRate = Double(nominalFrameRate)
+            self.currentRenderingFPS = Double(nominalFrameRate)
+        }
+    }
+
+    func directPlaybackDidFail(_ message: String) {
+        guard playbackBackend == .directFFmpeg, let sourceURL = directPlaybackURL else { return }
+        statusMessage = "\(message) Preparando compatible..."
+        directPlaybackController?.shutdown()
+        directPlaybackController = nil
+        directPlaybackURL = nil
+        playbackBackend = .avFoundation
+
+        Task { @MainActor in
+            await convertAndLoadVideo(sourceURL)
+        }
+    }
+
     private func prepareVideoMetadata(for url: URL) async {
         let streams = await inspectCodecs(for: url)
         await MainActor.run {
@@ -316,7 +541,12 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     private func playVideo(_ url: URL, displayName: String) {
         detachLegibleOutput()
         playbackSourceURL = url
+        usesNativeVideoLayer = false
         let item = AVPlayerItem(url: url)
+        if url.scheme?.lowercased().hasPrefix("http") == true {
+            item.preferredForwardBufferDuration = hlsPlaybackOffset > 0 ? 0.75 : 2.0
+            item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
+        }
         configureLegibleOutput(for: item)
         applyVisualCompositionIfNeeded(to: item)
         itemStatusObservation = item.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
@@ -330,9 +560,21 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                     self.statusMessage = nil
                     self.loadFrameRateFallback(from: item.asset)
                     self.loadMediaTracks(from: item)
-                    self.player.playImmediately(atRate: self.playbackRate)
-                    self.isPlaying = true
+                    let isHLS = self.playbackSourceURL?.scheme?.lowercased().hasPrefix("http") == true
+                    let shouldStartPlayback = !isHLS || self.hlsShouldResumePlayback
+                    if shouldStartPlayback {
+                        self.player.playImmediately(atRate: self.playbackRate)
+                        self.isPlaying = true
+                    } else {
+                        self.isPlaying = false
+                    }
+                    if isHLS {
+                        self.hlsShouldResumePlayback = false
+                    }
                 case .failed:
+                    if self.retryCompatibleConversionIfNeeded() {
+                        return
+                    }
                     self.statusMessage = "No se pudo cargar el video convertido."
                     self.isPlaying = false
                 @unknown default:
@@ -345,8 +587,8 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         player.volume = Float(volume)
 
         fileName = displayName.isEmpty ? "Video.mp4" : displayName
-        currentTime = 0
-        duration = 0
+        currentTime = url.scheme?.lowercased().hasPrefix("http") == true ? hlsPlaybackOffset : 0
+        duration = knownPlaybackDuration?.isFinite == true ? knownPlaybackDuration ?? 0 : 0
         isPlaying = false
         hasVideo = true
         statusMessage = nil
@@ -354,7 +596,11 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         Task {
             let loadedDuration = try? await item.asset.load(.duration)
             await MainActor.run {
-                duration = loadedDuration?.seconds.isFinite == true ? loadedDuration?.seconds ?? 0 : 0
+                if let seconds = loadedDuration?.seconds, seconds.isFinite, seconds > 0 {
+                    duration = seconds
+                } else if duration <= 0, let knownPlaybackDuration, knownPlaybackDuration.isFinite {
+                    duration = knownPlaybackDuration
+                }
                 startFramePlusPreparationForShortLowFPSClipIfUseful()
             }
         }
@@ -364,6 +610,54 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         containerFormatsNeedingConversion.contains(url.pathExtension.lowercased())
     }
 
+    private static func cachedCompatibleVideoURL(for sourceURL: URL) -> URL? {
+        guard let directory = compatibleVideoCacheDirectory(),
+              let key = compatibleVideoCacheKey(for: sourceURL) else {
+            return nil
+        }
+
+        return directory.appendingPathComponent(key).appendingPathExtension("mp4")
+    }
+
+    private static func compatibleVideoCacheDirectory() -> URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Rift", isDirectory: true)
+            .appendingPathComponent("CompatibleVideoCache", isDirectory: true)
+    }
+
+    private static func compatibleVideoCacheKey(for sourceURL: URL) -> String? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: sourceURL.path) else {
+            return nil
+        }
+
+        let fileSize = (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+        let modifiedAt = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let identity = "\(sourceURL.standardizedFileURL.path)|\(fileSize)|\(modifiedAt)"
+        let digest = SHA256.hash(data: Data(identity.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func isUsableCachedVideo(_ url: URL) -> Bool {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber else {
+            return false
+        }
+
+        return size.uint64Value > 1_048_576
+    }
+
+    private static func ensureCompatibleVideoCacheDirectoryExists(for cacheURL: URL) -> Bool {
+        do {
+            try FileManager.default.createDirectory(
+                at: cacheURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
     struct AudioTrack: Identifiable {
         let id: Int
         let label: String
@@ -371,11 +665,14 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     }
 
     struct StreamInfo {
+        let index: Int
         let codecName: String
         let codecType: String
         let width: Int?
         let height: Int?
         let frameRate: Double?
+        let language: String?
+        let title: String?
     }
 
     struct PlaybackMetrics {
@@ -389,93 +686,153 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
     private func inspectCodecs(for url: URL) async -> [StreamInfo] {
         guard let ffprobeURL = findFFprobe() else { return [] }
-        
+
         let process = Process()
         process.executableURL = ffprobeURL
         process.arguments = [
             "-v", "error",
-            "-show_entries", "stream=codec_name,codec_type,width,height,avg_frame_rate",
-            "-of", "csv=p=0",
+            "-show_entries", "stream=index,codec_name,codec_type,width,height,avg_frame_rate:stream_tags=language,title",
+            "-of", "json",
             url.path
         ]
-        
+
         let pipe = Pipe()
         process.standardOutput = pipe
-        
+
         do {
             try process.run()
-            
+
             let data = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
                 DispatchQueue.global(qos: .userInitiated).async {
                     let d = pipe.fileHandleForReading.readDataToEndOfFile()
                     continuation.resume(returning: d)
                 }
             }
-            
-            process.waitUntilExit()
-            
-            guard process.terminationStatus == 0 else { return [] }
-            
-            if let output = String(data: data, encoding: .utf8) {
-                var streams: [StreamInfo] = []
-                let lines = output.components(separatedBy: .newlines)
-                for line in lines {
-                    let parts = line.split(separator: ",")
-                    if parts.count >= 2 {
-                        let codecName = parts[0].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                        let codecType = parts[1].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                        
-                        var width: Int? = nil
-                        var height: Int? = nil
-                        
-                        if parts.count >= 4 {
-                            width = Int(parts[2].trimmingCharacters(in: .whitespacesAndNewlines))
-                            height = Int(parts[3].trimmingCharacters(in: .whitespacesAndNewlines))
-                        }
-                        
-                        let frameRate = parts.count >= 5
-                            ? Self.parseFrameRate(String(parts[4]))
-                            : nil
 
-                        streams.append(StreamInfo(
-                            codecName: codecName,
-                            codecType: codecType,
-                            width: width,
-                            height: height,
-                            frameRate: frameRate
-                        ))
-                    }
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0 else { return [] }
+
+            guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let rawStreams = root["streams"] as? [[String: Any]] else {
+                return []
+            }
+
+            return rawStreams.compactMap { raw in
+                guard let index = raw["index"] as? Int,
+                      let codecName = raw["codec_name"] as? String,
+                      let codecType = raw["codec_type"] as? String else {
+                    return nil
                 }
-                return streams
+                let tags = raw["tags"] as? [String: Any]
+                return StreamInfo(
+                    index: index,
+                    codecName: codecName.lowercased(),
+                    codecType: codecType.lowercased(),
+                    width: raw["width"] as? Int,
+                    height: raw["height"] as? Int,
+                    frameRate: (raw["avg_frame_rate"] as? String).flatMap(Self.parseFrameRate),
+                    language: tags?["language"] as? String,
+                    title: tags?["title"] as? String
+                )
             }
         } catch {
             return []
         }
-        return []
     }
 
-    private func convertAndLoadVideo(_ sourceURL: URL) async {
+    private func inspectDuration(for url: URL) async -> Double? {
+        guard let ffprobeURL = findFFprobe() else { return nil }
+
+        let process = Process()
+        process.executableURL = ffprobeURL
+        process.arguments = [
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            url.path
+        ]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+
+        do {
+            try process.run()
+            let data = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(returning: pipe.fileHandleForReading.readDataToEndOfFile())
+                }
+            }
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0,
+                  let output = String(data: data, encoding: .utf8),
+                  let duration = Double(output.trimmingCharacters(in: .whitespacesAndNewlines)),
+                  duration.isFinite,
+                  duration > 0 else {
+                return nil
+            }
+
+            return duration
+        } catch {
+            return nil
+        }
+    }
+
+    private func convertAndLoadVideo(_ sourceURL: URL, allowFastRemux: Bool = true, startAt: Double = 0) async {
+        statusMessage = startAt > 0 ? "Saltando a \(formattedTime(startAt))..." : "Inspeccionando archivo..."
+        if startAt <= 0 {
+            hasVideo = false
+        }
+        fileName = sourceURL.lastPathComponent
+
+        if allowFastRemux,
+           let cachedURL = Self.cachedCompatibleVideoURL(for: sourceURL),
+           Self.isUsableCachedVideo(cachedURL) {
+            statusMessage = "Abriendo cache compatible..."
+            convertedVideoDirectoryURL = nil
+            convertedVideoURL = cachedURL
+            convertedVideoShouldCleanup = false
+            playVideo(cachedURL, displayName: sourceURL.lastPathComponent)
+            if startAt > 0 {
+                seek(to: startAt)
+            }
+            return
+        }
+
         guard let ffmpegURL = findFFmpeg() else {
             statusMessage = "Este formato necesita FFmpeg incluido en Rift o instalado con brew."
             hasVideo = false
             return
         }
 
-        statusMessage = "Inspeccionando archivo..."
-        hasVideo = false
-        fileName = sourceURL.lastPathComponent
-
-        // Inspeccionar códecs
-        let streams = await inspectCodecs(for: sourceURL)
+        // Inspeccionar códecs y duración original para que los streams HLS tengan timeline real.
+        let canReuseCachedMetadata = startAt > 0
+            && cachedSourceMetadataURL?.standardizedFileURL == sourceURL.standardizedFileURL
+            && !cachedSourceStreams.isEmpty
+        let streams: [StreamInfo]
+        let sourceDuration: Double?
+        if canReuseCachedMetadata {
+            streams = cachedSourceStreams
+            sourceDuration = cachedSourceDuration ?? knownPlaybackDuration
+        } else {
+            streams = await inspectCodecs(for: sourceURL)
+            sourceDuration = await inspectDuration(for: sourceURL)
+            cachedSourceMetadataURL = sourceURL.standardizedFileURL
+            cachedSourceStreams = streams
+            cachedSourceDuration = sourceDuration
+        }
         let videoStream = streams.first { $0.codecType == "video" }
         let audioStream = streams.first { $0.codecType == "audio" }
         
         let videoCodec = videoStream?.codecName
         let audioCodec = audioStream?.codecName
-        
-        let isVideoCopyable = videoCodec == "h264" || videoCodec == "hevc" || videoCodec == "h265"
-        let isAudioCopyable = audioCodec == "aac" || audioCodec == "mp3" || audioCodec == "ac3" || audioCodec == "eac3" || audioCodec == "flac" || audioCodec == "alac"
+
+        let canFastRemuxVideo = ["h264", "hevc", "h265"].contains(videoCodec)
         let mp4VideoTagArgs = (videoCodec == "hevc" || videoCodec == "h265") ? ["-tag:v", "hvc1"] : []
+        let textSubtitleStreams = streams.filter {
+            $0.codecType == "subtitle" && Self.isMP4TextSubtitleCodec($0.codecName)
+        }
 
         await MainActor.run {
             self.videoCodec = videoCodec?.uppercased()
@@ -486,14 +843,35 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                 self.videoResolution = nil
             }
             self.sourceFrameRate = videoStream?.frameRate
+            if let sourceDuration {
+                self.knownPlaybackDuration = sourceDuration
+                self.duration = sourceDuration
+            }
         }
 
-        statusMessage = "Preparando \(sourceURL.pathExtension.uppercased())..."
+        statusMessage = startAt > 0
+            ? "Saltando a \(formattedTime(startAt))..."
+            : "Preparando \(sourceURL.pathExtension.uppercased())..."
 
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Rift-\(UUID().uuidString).mp4")
+        let candidateCacheURL = allowFastRemux ? Self.cachedCompatibleVideoURL(for: sourceURL) : nil
+        let finalCachedOutputURL: URL?
+        let outputURL: URL
+        if let cacheURL = candidateCacheURL,
+           Self.ensureCompatibleVideoCacheDirectoryExists(for: cacheURL) {
+            finalCachedOutputURL = cacheURL
+            outputURL = cacheURL.deletingLastPathComponent()
+                .appendingPathComponent(".\(cacheURL.deletingPathExtension().lastPathComponent)-\(UUID().uuidString).partial.mp4")
+        } else {
+            finalCachedOutputURL = nil
+            outputURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("Rift-\(UUID().uuidString).mp4")
+        }
 
-        convertedVideoURL = outputURL
+        let isAudioCopyable = ["aac", "mp3", "ac3", "eac3", "flac", "alac"].contains(audioCodec)
+        let copyOrAACAudioArgs = isAudioCopyable
+            ? ["-c:a", "copy"]
+            : ["-c:a", "aac", "-b:a", "192k"]
+        let compatibleAudioArgs = ["-c:a", "aac", "-b:a", "192k", "-ac", "2"]
 
         var ffmpegArgs = [
             "-hide_banner",
@@ -501,32 +879,26 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             "-i", sourceURL.path,
             "-map", "0:v:0",
             "-map", "0:a?",
-            "-sn",
             "-dn"
-        ]
+        ] + Self.subtitleMapArgs(for: textSubtitleStreams)
 
-        if isVideoCopyable && isAudioCopyable {
+        if allowFastRemux && canFastRemuxVideo {
             ffmpegArgs += [
-                "-c", "copy",
-            ] + mp4VideoTagArgs + [
+                "-map_metadata", "0",
+                "-c:v", "copy",
+            ] + mp4VideoTagArgs + copyOrAACAudioArgs + [
+                "-c:s", "mov_text",
                 "-y", outputURL.path
             ]
+            convertedVideoURL = outputURL
+            convertedVideoShouldCleanup = true
             let success = await runFFmpegAsync(ffmpegURL, arguments: ffmpegArgs, phase: "Preparando video")
             if success {
-                self.playVideo(outputURL, displayName: sourceURL.lastPathComponent)
-                return
-            }
-        } else if isVideoCopyable && !isAudioCopyable {
-            ffmpegArgs += [
-                "-c:v", "copy",
-            ] + mp4VideoTagArgs + [
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-y", outputURL.path
-            ]
-            let success = await runFFmpegAsync(ffmpegURL, arguments: ffmpegArgs, phase: "Convirtiendo audio")
-            if success {
-                self.playVideo(outputURL, displayName: sourceURL.lastPathComponent)
+                let playableURL = finalizePreparedVideo(outputURL, cachedOutputURL: finalCachedOutputURL)
+                self.playVideo(playableURL, displayName: sourceURL.lastPathComponent)
+                if startAt > 0 {
+                    self.seek(to: startAt)
+                }
                 return
             }
         }
@@ -539,22 +911,23 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             "-i", sourceURL.path,
             "-map", "0:v:0",
             "-map", "0:a?",
-            "-sn",
             "-dn",
             "-c:v", "h264_videotoolbox",
             "-b:v", "8M",
-            "-pix_fmt", "yuv420p"
-        ]
-        if isAudioCopyable {
-            hwArgs += ["-c:a", "copy"]
-        } else {
-            hwArgs += ["-c:a", "aac", "-b:a", "192k"]
-        }
-        hwArgs += ["-y", outputURL.path]
+            "-pix_fmt", "yuv420p",
+            "-map_metadata", "0"
+        ] + Self.subtitleMapArgs(for: textSubtitleStreams)
+        hwArgs += compatibleAudioArgs + ["-c:s", "mov_text", "-y", outputURL.path]
 
+        convertedVideoURL = outputURL
+        convertedVideoShouldCleanup = true
         let hwSuccess = await runFFmpegAsync(ffmpegURL, arguments: hwArgs, phase: "Convirtiendo video")
         if hwSuccess {
-            self.playVideo(outputURL, displayName: sourceURL.lastPathComponent)
+            let playableURL = finalizePreparedVideo(outputURL, cachedOutputURL: finalCachedOutputURL)
+            self.playVideo(playableURL, displayName: sourceURL.lastPathComponent)
+            if startAt > 0 {
+                self.seek(to: startAt)
+            }
             return
         }
 
@@ -566,28 +939,65 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             "-i", sourceURL.path,
             "-map", "0:v:0",
             "-map", "0:a?",
-            "-sn",
             "-dn",
             "-c:v", "libx264",
             "-preset", "veryfast",
             "-crf", "20",
-            "-pix_fmt", "yuv420p"
-        ]
-        if isAudioCopyable {
-            swArgs += ["-c:a", "copy"]
-        } else {
-            swArgs += ["-c:a", "aac", "-b:a", "192k"]
-        }
-        swArgs += ["-y", outputURL.path]
+            "-pix_fmt", "yuv420p",
+            "-map_metadata", "0"
+        ] + Self.subtitleMapArgs(for: textSubtitleStreams)
+        swArgs += compatibleAudioArgs + ["-c:s", "mov_text", "-y", outputURL.path]
 
         let swSuccess = await runFFmpegAsync(ffmpegURL, arguments: swArgs, phase: "Convirtiendo compatible")
         if swSuccess {
-            self.playVideo(outputURL, displayName: sourceURL.lastPathComponent)
+            let playableURL = finalizePreparedVideo(outputURL, cachedOutputURL: finalCachedOutputURL)
+            self.playVideo(playableURL, displayName: sourceURL.lastPathComponent)
+            if startAt > 0 {
+                self.seek(to: startAt)
+            }
         } else {
             self.statusMessage = "No se pudo convertir este video."
             self.hasVideo = false
             self.cleanupConvertedVideo()
         }
+    }
+
+    private func finalizePreparedVideo(_ outputURL: URL, cachedOutputURL: URL?) -> URL {
+        guard let cachedOutputURL else {
+            convertedVideoURL = outputURL
+            convertedVideoShouldCleanup = true
+            return outputURL
+        }
+
+        do {
+            try? FileManager.default.removeItem(at: cachedOutputURL)
+            try FileManager.default.moveItem(at: outputURL, to: cachedOutputURL)
+            convertedVideoURL = cachedOutputURL
+            convertedVideoShouldCleanup = false
+            return cachedOutputURL
+        } catch {
+            convertedVideoURL = outputURL
+            convertedVideoShouldCleanup = true
+            return outputURL
+        }
+    }
+
+    private func retryCompatibleConversionIfNeeded() -> Bool {
+        guard !attemptedCompatibleFallback,
+              let sourceURL = originalVideoURL,
+              needsConversion(sourceURL),
+              playbackSourceURL == convertedVideoURL else {
+            return false
+        }
+
+        attemptedCompatibleFallback = true
+        statusMessage = "Reintentando conversion compatible..."
+        isPlaying = false
+        cleanupConvertedVideo()
+        Task { @MainActor in
+            await self.convertAndLoadVideo(sourceURL, allowFastRemux: false)
+        }
+        return true
     }
 
     private func startFramePlusPreparationIfUseful() {
@@ -677,7 +1087,6 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             "-b:v", "18M",
             "-pix_fmt", "yuv420p",
             "-c:a", "copy",
-            "-movflags", "+faststart",
             "-y", outputURL.path
         ]
 
@@ -758,6 +1167,425 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
     }
 
+    private func runFFmpegHLS(
+        _ executableURL: URL,
+        arguments: [String],
+        playlistURL: URL,
+        sourcePlaylistURL: URL,
+        playbackPlaylistURL: URL,
+        hlsDirectory: URL,
+        displayName: String,
+        phase: String,
+        playbackOffset: Double
+    ) async -> Bool {
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = ["-nostdin"] + arguments
+        process.standardError = Pipe()
+        conversionProcess = process
+
+        do {
+            try process.run()
+        } catch {
+            conversionProcess = nil
+            return false
+        }
+
+        let startTime = Date()
+
+        while process.isRunning {
+            let elapsedSeconds = Int(Date().timeIntervalSince(startTime))
+            statusMessage = "\(phase)... \(elapsedSeconds)s"
+
+            let startupDuration: TimeInterval = playbackOffset > 0 ? 0.75 : 2.5
+            if Self.hlsPlaylistDuration(at: sourcePlaylistURL) >= startupDuration,
+               Self.writeMirroredHLSPlaylist(
+                from: sourcePlaylistURL,
+                to: playbackPlaylistURL,
+                maxSegments: nil,
+                revealDuration: max(12, startupDuration)
+            ) {
+                hlsSourcePlaylistURL = sourcePlaylistURL
+                hlsPlaybackPlaylistURL = playbackPlaylistURL
+                hlsMinimumRevealDuration = 0
+                hlsPlaybackOffset = max(0, playbackOffset)
+                statusMessage = nil
+                playVideo(playlistURL, displayName: displayName)
+                startHLSPlaylistMirror(
+                    sourcePlaylistURL: sourcePlaylistURL,
+                    playbackPlaylistURL: playbackPlaylistURL
+                )
+                observeProgressiveFFmpegCompletion(process, playbackURL: playlistURL)
+                return true
+            }
+
+            if elapsedSeconds >= 12 {
+                process.terminate()
+                conversionProcess = nil
+                hlsServer?.stop()
+                hlsServer = nil
+                try? FileManager.default.removeItem(at: hlsDirectory)
+                return false
+            }
+
+            try? await Task.sleep(nanoseconds: 25_000_000)
+        }
+
+        let success = process.terminationStatus == 0
+        conversionProcess = nil
+        let mirroredPlaylist = Self.writeMirroredHLSPlaylist(
+            from: sourcePlaylistURL,
+            to: playbackPlaylistURL,
+            maxSegments: nil,
+            revealDuration: nil
+        )
+        guard success, mirroredPlaylist, await Self.hlsPlaylistLooksPlayable(playlistURL) else {
+            hlsServer?.stop()
+            hlsServer = nil
+            try? FileManager.default.removeItem(at: hlsDirectory)
+            return false
+        }
+
+        hlsSourcePlaylistURL = sourcePlaylistURL
+        hlsPlaybackPlaylistURL = playbackPlaylistURL
+        hlsMinimumRevealDuration = 0
+        hlsPlaybackOffset = max(0, playbackOffset)
+        playVideo(playlistURL, displayName: displayName)
+        return true
+    }
+
+    private func observeProgressiveFFmpegCompletion(_ process: Process, playbackURL: URL) {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            process.waitUntilExit()
+            let success = process.terminationStatus == 0
+
+            Task { @MainActor in
+                guard let self else { return }
+                if self.conversionProcess === process {
+                    self.conversionProcess = nil
+                }
+                if !success, self.playbackSourceURL == playbackURL {
+                    self.statusMessage = "La preparacion se detuvo; puedes reabrir el archivo para reintentar."
+                }
+            }
+        }
+    }
+
+    private func startHLSPlaylistMirror(sourcePlaylistURL: URL, playbackPlaylistURL: URL) {
+        hlsPlaylistUpdateTask?.cancel()
+        hlsSourcePlaylistURL = sourcePlaylistURL
+        hlsPlaybackPlaylistURL = playbackPlaylistURL
+        hlsMinimumRevealDuration = 0
+
+        hlsPlaylistUpdateTask = Task { @MainActor in
+            let startedAt = Date()
+
+            while !Task.isCancelled {
+                let elapsed = Date().timeIntervalSince(startedAt)
+                let automaticRevealDuration = max(12, elapsed + 45)
+                let revealDuration = max(automaticRevealDuration, self.hlsMinimumRevealDuration)
+
+                let isComplete = Self.writeMirroredHLSPlaylist(
+                    from: sourcePlaylistURL,
+                    to: playbackPlaylistURL,
+                    maxSegments: nil,
+                    revealDuration: revealDuration
+                )
+
+                if isComplete,
+                   let playlist = try? String(contentsOf: sourcePlaylistURL, encoding: .utf8),
+                   playlist.contains("#EXT-X-ENDLIST") {
+                    _ = Self.writeMirroredHLSPlaylist(
+                        from: sourcePlaylistURL,
+                        to: playbackPlaylistURL,
+                        maxSegments: nil,
+                        revealDuration: nil
+                    )
+                    break
+                }
+
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+        }
+    }
+
+    private func seekHLS(to absoluteSeconds: Double) {
+        let shouldResume = shouldResumeAfterHLSSeek()
+        let relativeSeconds = absoluteSeconds - hlsPlaybackOffset
+        let generatedDuration = generatedHLSDuration()
+        if relativeSeconds >= 0, generatedDuration > 0, relativeSeconds <= max(0, generatedDuration - 0.25) {
+            hlsSeekTask?.cancel()
+            hlsShouldResumePlayback = shouldResume
+            revealHLSPlaylist(upTo: relativeSeconds + 15)
+            currentTime = absoluteSeconds
+
+            let seekTime = CMTime(seconds: relativeSeconds, preferredTimescale: 600)
+            let tolerance = CMTime(seconds: 0.35, preferredTimescale: 600)
+            player.seek(to: seekTime, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
+                Task { @MainActor in
+                    guard let self else { return }
+                    guard finished else {
+                        self.restartHLSPlayback(at: absoluteSeconds, shouldResume: shouldResume)
+                        return
+                    }
+
+                    let landedTime = self.hlsPlaybackOffset + self.player.currentTime().seconds
+                    if landedTime.isFinite, abs(landedTime - absoluteSeconds) <= 1.0 {
+                        self.currentTime = absoluteSeconds
+                        if shouldResume {
+                            self.player.playImmediately(atRate: self.playbackRate)
+                            self.isPlaying = true
+                            self.hlsShouldResumePlayback = false
+                        }
+                    } else {
+                        self.restartHLSPlayback(at: absoluteSeconds, shouldResume: shouldResume)
+                    }
+                }
+            }
+            return
+        }
+
+        // AVPlayer treats parts that are not in the generated local HLS playlist like an
+        // unreachable live range. Restart there, but only for those far jumps.
+        restartHLSPlayback(at: absoluteSeconds, shouldResume: shouldResume)
+    }
+
+    private func restartHLSPlayback(at absoluteSeconds: Double, shouldResume: Bool? = nil) {
+        guard let sourceURL = originalVideoURL else { return }
+        let targetSeconds = duration > 0
+            ? max(0, min(absoluteSeconds, max(0, duration - 0.5)))
+            : max(0, absoluteSeconds)
+
+        hlsSeekTask?.cancel()
+        hlsSeekTask = Task { @MainActor in
+            let shouldResumePlayback = shouldResume ?? shouldResumeAfterHLSSeek()
+            hlsShouldResumePlayback = shouldResumePlayback
+            statusMessage = "Saltando a \(formattedTime(targetSeconds))..."
+            currentTime = targetSeconds
+            hlsPlaybackOffset = targetSeconds
+            isPlaying = shouldResumePlayback
+            player.pause()
+            detachLegibleOutput()
+            player.replaceCurrentItem(with: nil)
+            playbackSourceURL = nil
+            conversionProcess?.terminate()
+            conversionProcess = nil
+            cleanupConvertedVideo(keepingFramePlus: true)
+
+            await convertAndLoadVideo(sourceURL, allowFastRemux: true, startAt: targetSeconds)
+        }
+    }
+
+    private func shouldResumeAfterHLSSeek() -> Bool {
+        isPlaying
+            || player.rate > 0
+            || player.timeControlStatus == .playing
+            || player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+            || hlsShouldResumePlayback
+    }
+
+    private func visibleHLSDuration() -> TimeInterval {
+        guard let hlsPlaybackPlaylistURL,
+              let playlist = try? String(contentsOf: hlsPlaybackPlaylistURL, encoding: .utf8) else {
+            return 0
+        }
+
+        return Self.parseHLSPlaylist(playlist).segments.reduce(0) { $0 + $1.duration }
+    }
+
+    private func generatedHLSDuration() -> TimeInterval {
+        guard let hlsSourcePlaylistURL,
+              let playlist = try? String(contentsOf: hlsSourcePlaylistURL, encoding: .utf8) else {
+            return visibleHLSDuration()
+        }
+
+        return max(visibleHLSDuration(), Self.parseHLSPlaylist(playlist).segments.reduce(0) { $0 + $1.duration })
+    }
+
+    private func revealHLSPlaylist(upTo seconds: TimeInterval) {
+        guard let hlsSourcePlaylistURL,
+              let hlsPlaybackPlaylistURL,
+              seconds.isFinite,
+              seconds > 0 else {
+            return
+        }
+
+        hlsMinimumRevealDuration = max(hlsMinimumRevealDuration, seconds)
+        _ = Self.writeMirroredHLSPlaylist(
+            from: hlsSourcePlaylistURL,
+            to: hlsPlaybackPlaylistURL,
+            maxSegments: nil,
+            revealDuration: hlsMinimumRevealDuration
+        )
+    }
+
+    nonisolated private static func fileSize(at url: URL) -> UInt64 {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber else {
+            return 0
+        }
+        return size.uint64Value
+    }
+
+    nonisolated private static func hlsDirectoryHasSegments(_ directoryURL: URL) -> Bool {
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: nil
+        ) else {
+            return false
+        }
+
+        return contents.contains { $0.pathExtension == "m4s" || $0.pathExtension == "ts" }
+    }
+
+    nonisolated private static func hlsPlaylistHasReadySegment(_ playlistURL: URL, in directoryURL: URL) -> Bool {
+        guard let playlist = try? String(contentsOf: playlistURL, encoding: .utf8) else {
+            return false
+        }
+
+        let segmentLines = playlist
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+            .filter { line in
+                !line.hasPrefix("#") && (line.hasSuffix(".ts") || line.hasSuffix(".m4s"))
+            }
+
+        guard !segmentLines.isEmpty else { return false }
+
+        return segmentLines.contains { segmentLine in
+            let segmentURL = directoryURL.appendingPathComponent(segmentLine)
+            return fileSize(at: segmentURL) > 0
+        }
+    }
+
+    nonisolated private static func hlsPlaylistDuration(at url: URL) -> TimeInterval {
+        guard let playlist = try? String(contentsOf: url, encoding: .utf8) else {
+            return 0
+        }
+
+        return parseHLSPlaylist(playlist).segments.reduce(0) { $0 + $1.duration }
+    }
+
+    nonisolated private static func writeMirroredHLSPlaylist(
+        from sourceURL: URL,
+        to destinationURL: URL,
+        maxSegments: Int?,
+        revealDuration: TimeInterval?
+    ) -> Bool {
+        guard let source = try? String(contentsOf: sourceURL, encoding: .utf8) else {
+            return false
+        }
+
+        let parsed = parseHLSPlaylist(source)
+        guard !parsed.segments.isEmpty else { return false }
+
+        let selectedCount: Int
+        if let maxSegments {
+            selectedCount = min(maxSegments, parsed.segments.count)
+        } else if let revealDuration {
+            var accumulated: TimeInterval = 0
+            var count = 0
+            for segment in parsed.segments {
+                accumulated += segment.duration
+                count += 1
+                if accumulated >= revealDuration {
+                    break
+                }
+            }
+            selectedCount = max(1, min(count, parsed.segments.count))
+        } else {
+            selectedCount = parsed.segments.count
+        }
+
+        guard selectedCount > 0 else { return false }
+
+        let selectedSegments = Array(parsed.segments.prefix(selectedCount))
+        let targetDuration = max(1, Int(ceil(selectedSegments.map(\.duration).max() ?? 1)))
+        var output = parsed.headerLines.filter { !$0.hasPrefix("#EXT-X-TARGETDURATION:") }
+        let targetDurationLine = "#EXT-X-TARGETDURATION:\(targetDuration)"
+        if let versionIndex = output.firstIndex(where: { $0.hasPrefix("#EXT-X-VERSION:") }) {
+            output.insert(targetDurationLine, at: output.index(after: versionIndex))
+        } else {
+            output.append(targetDurationLine)
+        }
+
+        for segment in selectedSegments {
+            output.append(contentsOf: segment.lines)
+        }
+
+        if parsed.hasEndList && selectedCount == parsed.segments.count {
+            output.append("#EXT-X-ENDLIST")
+        }
+
+        do {
+            try output.joined(separator: "\n")
+                .appending("\n")
+                .write(to: destinationURL, atomically: true, encoding: .utf8)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private struct HLSPlaylistSegment {
+        let duration: TimeInterval
+        let lines: [String]
+    }
+
+    nonisolated private static func parseHLSPlaylist(_ source: String) -> (headerLines: [String], segments: [HLSPlaylistSegment], hasEndList: Bool) {
+        let lines = source.split(whereSeparator: \.isNewline).map(String.init)
+        var headerLines: [String] = []
+        var segments: [HLSPlaylistSegment] = []
+        var hasEndList = false
+        var index = 0
+
+        while index < lines.count {
+            let line = lines[index]
+
+            if line == "#EXT-X-ENDLIST" {
+                hasEndList = true
+                index += 1
+                continue
+            }
+
+            if line.hasPrefix("#EXTINF:") {
+                let uriIndex = index + 1
+                guard uriIndex < lines.count else { break }
+                let uriLine = lines[uriIndex]
+                let durationText = line
+                    .dropFirst("#EXTINF:".count)
+                    .split(separator: ",", maxSplits: 1)
+                    .first
+                    .map(String.init) ?? "0"
+                let duration = TimeInterval(durationText) ?? 0
+
+                if !uriLine.hasPrefix("#") {
+                    segments.append(HLSPlaylistSegment(duration: duration, lines: [line, uriLine]))
+                }
+
+                index += 2
+                continue
+            }
+
+            if segments.isEmpty, !line.isEmpty {
+                headerLines.append(line)
+            }
+
+            index += 1
+        }
+
+        return (headerLines, segments, hasEndList)
+    }
+
+    private static func hlsPlaylistLooksPlayable(_ url: URL) async -> Bool {
+        let asset = AVURLAsset(url: url)
+        do {
+            return try await asset.load(.isPlayable)
+        } catch {
+            return false
+        }
+    }
+
     private func configureLegibleOutput(for item: AVPlayerItem) {
         let output = AVPlayerItemLegibleOutput()
         output.suppressesPlayerRendering = true
@@ -772,6 +1600,8 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             player.currentItem?.remove(legibleOutput)
         }
         legibleOutput = nil
+        audioSelectionGroup = nil
+        audioOptionsByIndex.removeAll()
         subtitleSelectionGroup = nil
         subtitleOptionsByID.removeAll()
         currentSubtitleText = nil
@@ -788,38 +1618,60 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             // AVMediaSelectionGroup only works for HLS and some native containers.
             guard let allTracks = try? await item.asset.loadTracks(withMediaType: .audio),
                   !allTracks.isEmpty else {
-                await MainActor.run { self.audioTracks = [] }
+                await MainActor.run {
+                    self.audioTracks = []
+                    self.audioSelectionGroup = nil
+                    self.audioOptionsByIndex.removeAll()
+                }
                 return
             }
 
+            let audibleGroup = try? await item.asset.loadMediaSelectionGroup(for: .audible)
+            let audibleOptions = audibleGroup?.options ?? []
+
             // Build label list using language metadata from each track.
             var result: [AudioTrack] = []
-            for (index, track) in allTracks.enumerated() {
-                let rawLang  = (try? await track.load(.languageCode)) ?? ""
-                let extTag   = (try? await track.load(.extendedLanguageTag)) ?? ""
-                let effective = (rawLang.isEmpty || rawLang == "und") ? extTag : rawLang
-
-                let label: String
-                if !effective.isEmpty {
-                    label = Locale.current.localizedString(forLanguageCode: effective)
-                        ?? effective.uppercased()
-                } else {
-                    label = "Pista \(index + 1)"
+            if !audibleOptions.isEmpty {
+                for (index, option) in audibleOptions.enumerated() {
+                    let language = option.extendedLanguageTag ?? option.locale?.identifier
+                    let label = Self.localizedMediaSelectionLabel(
+                        fallbackPrefix: "Audio",
+                        index: index,
+                        displayName: option.displayName,
+                        language: language
+                    )
+                    result.append(AudioTrack(id: index, label: label, language: language))
                 }
-                result.append(AudioTrack(
-                    id: index,
-                    label: label,
-                    language: effective.isEmpty ? nil : effective
-                ))
+            } else {
+                for (index, track) in allTracks.enumerated() {
+                    let rawLang  = (try? await track.load(.languageCode)) ?? ""
+                    let extTag   = (try? await track.load(.extendedLanguageTag)) ?? ""
+                    let effective = (rawLang.isEmpty || rawLang == "und") ? extTag : rawLang
+
+                    let label: String
+                    if !effective.isEmpty {
+                        label = Locale.current.localizedString(forLanguageCode: effective)
+                            ?? effective.uppercased()
+                    } else {
+                        label = "Pista \(index + 1)"
+                    }
+                    result.append(AudioTrack(
+                        id: index,
+                        label: label,
+                        language: effective.isEmpty ? nil : effective
+                    ))
+                }
             }
 
             await MainActor.run {
                 // Only show picker when there are genuinely multiple tracks.
-                if allTracks.count > 1 {
+                if result.count > 1 {
                     self.audioTracks = result
                 } else {
                     self.audioTracks = []
                 }
+                self.audioSelectionGroup = audibleGroup
+                self.audioOptionsByIndex = Dictionary(uniqueKeysWithValues: audibleOptions.enumerated().map { ($0.offset, $0.element) })
                 self.availableTracks.removeAll { $0.kind == .audio }
                 self.availableTracks.append(contentsOf: result.map {
                     MediaTrack(
@@ -832,8 +1684,13 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                 })
                 self.selectedAudioTrack = self.availableTracks.first { $0.kind == .audio }
                 self.selectedAudioTrackIndex = 0
-                // Immediately mute all tracks except the first — fixes double-audio bug.
-                self.applyAudioMix(trackIndex: 0, to: item, allTracks: allTracks)
+                if let audibleGroup, let firstOption = audibleOptions.first {
+                    item.select(firstOption, in: audibleGroup)
+                    item.audioMix = nil
+                } else {
+                    // Immediately mute all tracks except the first — fixes double-audio bug.
+                    self.applyAudioMix(trackIndex: 0, to: item, allTracks: allTracks)
+                }
             }
         }
     }
@@ -923,12 +1780,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     }
 
     private func applyVisualCompositionIfNeeded(to item: AVPlayerItem) {
-        guard visualEnhancementsEnabled, interpolationMode == .disabled else {
-            item.videoComposition = nil
-            return
-        }
-
-        item.videoComposition = Self.visualEnhancementComposition(for: item.asset)
+        item.videoComposition = nil
     }
 
     private nonisolated static func visualEnhancementComposition(for asset: AVAsset) -> AVVideoComposition {
@@ -941,17 +1793,17 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     nonisolated static func applyVisualEnhancements(to image: CIImage) -> CIImage {
         let extent = image.extent
         let color = image
-            .applyingFilter("CIColorControls", parameters: [
-                kCIInputSaturationKey: 1.18,
-                kCIInputContrastKey: 1.10,
-                kCIInputBrightnessKey: 0.015
-            ])
             .applyingFilter("CIHighlightShadowAdjust", parameters: [
-                "inputHighlightAmount": 0.82,
-                "inputShadowAmount": 0.26
+                "inputHighlightAmount": 0.90,
+                "inputShadowAmount": 0.48
+            ])
+            .applyingFilter("CIColorControls", parameters: [
+                kCIInputSaturationKey: 1.08,
+                kCIInputContrastKey: 1.02,
+                kCIInputBrightnessKey: 0.0
             ])
             .applyingFilter("CISharpenLuminance", parameters: [
-                kCIInputSharpnessKey: 0.36
+                kCIInputSharpnessKey: 0.20
             ])
 
         return color.cropped(to: extent)
@@ -990,6 +1842,22 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
 
         return Double(trimmed)
+    }
+
+    private static func isMP4TextSubtitleCodec(_ codecName: String) -> Bool {
+        [
+            "ass",
+            "mov_text",
+            "ssa",
+            "srt",
+            "subrip",
+            "text",
+            "webvtt"
+        ].contains(codecName.lowercased())
+    }
+
+    private static func subtitleMapArgs(for streams: [StreamInfo]) -> [String] {
+        streams.flatMap { ["-map", "0:\($0.index)"] }
     }
 
     private func findFFprobe() -> URL? {
@@ -1042,11 +1910,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     }
 
     private func executableSearchBundles() -> [Bundle] {
-        var bundles = [Bundle.main]
-        #if SWIFT_PACKAGE
-        bundles.append(Bundle.module)
-        #endif
-        return bundles
+        [Bundle.main]
     }
 
     nonisolated func legibleOutput(
@@ -1090,12 +1954,27 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         return "\(prefix) \(index + 1) · \(localized)"
     }
 
-    private func cleanupConvertedVideo() {
-        if let convertedVideoURL {
+    private func cleanupConvertedVideo(keepingFramePlus: Bool = false) {
+        hlsPlaylistUpdateTask?.cancel()
+        hlsPlaylistUpdateTask = nil
+        hlsSourcePlaylistURL = nil
+        hlsPlaybackPlaylistURL = nil
+        hlsMinimumRevealDuration = 0
+        hlsServer?.stop()
+        hlsServer = nil
+
+        if let convertedVideoDirectoryURL {
+            try? FileManager.default.removeItem(at: convertedVideoDirectoryURL)
+        } else if let convertedVideoURL, convertedVideoURL.isFileURL, convertedVideoShouldCleanup {
             try? FileManager.default.removeItem(at: convertedVideoURL)
         }
+
+        convertedVideoDirectoryURL = nil
         self.convertedVideoURL = nil
-        cleanupFramePlusVideo()
+        convertedVideoShouldCleanup = true
+        if !keepingFramePlus {
+            cleanupFramePlusVideo()
+        }
     }
 
     private func cleanupFramePlusVideo() {
@@ -1113,15 +1992,27 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             Task { @MainActor in
                 guard let self else { return }
 
-                self.currentTime = time.seconds.isFinite ? time.seconds : 0
+                let rawSeconds = time.seconds.isFinite ? time.seconds : 0
+                let displaySeconds = self.playbackSourceURL?.scheme?.lowercased().hasPrefix("http") == true
+                    ? self.hlsPlaybackOffset + rawSeconds
+                    : rawSeconds
+                self.currentTime = self.duration > 0
+                    ? min(max(0, displaySeconds), self.duration)
+                    : max(0, displaySeconds)
 
                 if let itemDuration = self.player.currentItem?.duration.seconds,
                    itemDuration.isFinite,
-                   itemDuration > 0 {
+                   itemDuration > 0,
+                   self.playbackSourceURL?.scheme?.lowercased().hasPrefix("http") != true {
                     self.duration = itemDuration
                 }
 
+                let isWaitingToResume = self.playbackSourceURL?.scheme?.lowercased().hasPrefix("http") == true
+                    && self.hlsShouldResumePlayback
+                    && self.player.currentItem != nil
                 self.isPlaying = self.player.timeControlStatus == .playing
+                    || self.player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                    || isWaitingToResume
             }
         }
     }
