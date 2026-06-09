@@ -2,6 +2,7 @@ import AVFoundation
 import AppKit
 import CoreImage
 import MetalKit
+import QuartzCore
 import SwiftUI
 
 struct RiftPlayerView: NSViewRepresentable {
@@ -64,6 +65,11 @@ final class MetalVideoView: MTKView {
         colorPixelFormat = .bgra8Unorm
         clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         layer?.isOpaque = true
+        if let metalLayer = layer as? CAMetalLayer {
+            metalLayer.displaySyncEnabled = true
+            metalLayer.presentsWithTransaction = false
+            metalLayer.allowsNextDrawableTimeout = false
+        }
     }
 
     required init(coder: NSCoder) {
@@ -317,7 +323,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         sourceFrameRate: Double?
     ) -> Int {
         guard fpsMode == .flux else {
-            return fpsMode.renderFramesPerSecond(sourceFrameRate: sourceFrameRate)
+            return nativeDisplaySyncedFPS(sourceFrameRate: sourceFrameRate)
         }
         switch interpolationMode {
         case .disabled:
@@ -339,6 +345,16 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             ?? NSScreen.main?.maximumFramesPerSecond
             ?? 60
         return screenFPS >= 100 ? 120 : 60
+    }
+
+    private func nativeDisplaySyncedFPS(sourceFrameRate: Double?) -> Int {
+        let screenFPS = NSScreen.main?.maximumFramesPerSecond ?? 60
+        let displayFPS = screenFPS >= 100 ? 120 : 60
+        guard let sourceFrameRate, sourceFrameRate.isFinite, sourceFrameRate > 0 else {
+            return displayFPS
+        }
+
+        return sourceFrameRate >= 58 ? min(displayFPS, Int(sourceFrameRate.rounded())) : displayFPS
     }
 
     private func loadRIFEIfNeeded() {
@@ -481,30 +497,12 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        // FIX: For motion2Intense, MEMC encodes compute shaders into a commandBuffer;
-        // the resulting CVPixelBuffer is not readable by CIContext until those shaders
-        // have actually executed on the GPU. We solve this by using a dedicated MEMC
-        // commandBuffer, committing it and waiting for completion before the CI render pass.
-        let mecmCommandBuffer: MTLCommandBuffer?
-        if interpolationMode == .motion2Intense, let cq = commandQueue {
-            mecmCommandBuffer = cq.makeCommandBuffer()
-        } else {
-            mecmCommandBuffer = nil
-        }
-
         guard let frame = image(
             for: itemTime,
             hostTime: hostTime,
             drawableSize: view.drawableSize,
-            commandBuffer: mecmCommandBuffer ?? commandBuffer
+            commandBuffer: commandBuffer
         ) else { return }
-
-        // Commit the MEMC compute work first so the output pixelBuffer is fully written
-        // before CIContext tries to use it as a source texture.
-        if let mecmCB = mecmCommandBuffer {
-            mecmCB.commit()
-            mecmCB.waitUntilCompleted()
-        }
 
         recordRenderedFrame(frame)
 
@@ -1337,8 +1335,12 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             ? Double(blendFallbackFrameCount) / Double(interpolatedFrameCount)
             : 0
 
+        let reportedFPS = fpsMode == .native
+            ? (sourceFrameRate.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? drawLoopFPS)
+            : drawLoopFPS
+
         statsHandler?(VideoRenderStats(
-            renderingFPS: drawLoopFPS,
+            renderingFPS: reportedFPS,
             isArtificialInterpolationActive: isInterpolationActive,
             fluxWorkingWidth: fpsMode == .flux ? Int(fluxWorkingMaxWidth.rounded()) : nil,
             opticalFlowUsage: opticalFlowUsage,
