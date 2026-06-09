@@ -190,10 +190,10 @@ kernel void memcWarp(
     float edgeConfidence = smoothstep(0.0, 32.0, edgeDistance);
     float motionAmount = smoothstep(0.75, 6.0, length(motion));
     float stableWarp = confidence * vectorConfidence;
-    float motionMix = mix(stableWarp * 0.35, stableWarp, motionAmount);
+    float motionMix = mix(stableWarp * 0.42, stableWarp, motionAmount);
     float occlusionGuard = max(dissolveConfidence, 0.18);
     float hardEdgeGuard = mix(0.52, 1.0, hardEdgeConfidence);
-    float finalMix = min(0.66, motionMix * edgeConfidence * occlusionGuard * hardEdgeGuard);
+    float finalMix = min(0.74, motionMix * edgeConfidence * occlusionGuard * hardEdgeGuard);
 
     output.write(mix(safeBlend, warped, finalMix), gid);
 }
