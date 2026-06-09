@@ -69,6 +69,7 @@ final class MetalVideoView: MTKView {
             metalLayer.displaySyncEnabled = true
             metalLayer.presentsWithTransaction = false
             metalLayer.allowsNextDrawableTimeout = false
+            metalLayer.maximumDrawableCount = 3
         }
     }
 
@@ -330,31 +331,34 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
             return fpsMode.renderFramesPerSecond(sourceFrameRate: sourceFrameRate)
         case .rife2x:
             if let sourceFrameRate, sourceFrameRate > 0 {
-                return min(120, max(60, Int((sourceFrameRate * 2).rounded())))
+                return min(displayRefreshFPS(), max(60, Int((sourceFrameRate * 2).rounded())))
             }
             return 60
         case .motion2Intense:
-            return 120
+            return displayRefreshFPS()
         case .rife4x, .rifeAdaptive:
-            return 120
+            return displayRefreshFPS()
         }
     }
 
     private func framePlusRenderFPS(for view: MTKView) -> Int {
-        let screenFPS = view.window?.screen?.maximumFramesPerSecond
-            ?? NSScreen.main?.maximumFramesPerSecond
-            ?? 60
-        return screenFPS >= 100 ? 120 : 60
+        displayRefreshFPS(for: view.window?.screen)
     }
 
     private func nativeDisplaySyncedFPS(sourceFrameRate: Double?) -> Int {
-        let screenFPS = NSScreen.main?.maximumFramesPerSecond ?? 60
-        let displayFPS = screenFPS >= 100 ? 120 : 60
+        let displayFPS = displayRefreshFPS()
         guard let sourceFrameRate, sourceFrameRate.isFinite, sourceFrameRate > 0 else {
             return displayFPS
         }
 
         return sourceFrameRate >= 58 ? min(displayFPS, Int(sourceFrameRate.rounded())) : displayFPS
+    }
+
+    private func displayRefreshFPS(for screen: NSScreen? = nil) -> Int {
+        let rawFPS = screen?.maximumFramesPerSecond
+            ?? NSScreen.main?.maximumFramesPerSecond
+            ?? 60
+        return min(240, max(60, rawFPS))
     }
 
     private func loadRIFEIfNeeded() {
@@ -1196,7 +1200,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
     }
 
     private func estimatedSourceFrameDuration() -> Double {
-        let bufferFrames = interpolationMode == .motion2Intense ? 1.0 : 1.25
+        let bufferFrames = interpolationMode == .motion2Intense ? 1.35 : 1.25
         let maximumDelay = interpolationMode == .motion2Intense ? 0.24 : 0.10
         if sourceFrames.count >= 2 {
             let newest = sourceFrames[sourceFrames.count - 1].time.seconds
