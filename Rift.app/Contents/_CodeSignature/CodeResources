@@ -8,6 +8,14 @@
 		<data>
 		7g0CDUAAkeHXoZohLhU1fyFxbzA=
 		</data>
+		<key>Resources/KSPlayer_KSPlayer.bundle/KSPlayer_KSPlayer.bundle/Info.plist</key>
+		<data>
+		7g0CDUAAkeHXoZohLhU1fyFxbzA=
+		</data>
+		<key>Resources/KSPlayer_KSPlayer.bundle/KSPlayer_KSPlayer.bundle/Shaders.metal</key>
+		<data>
+		ZIoDIqcSlPM3yE7WWjuP9sdkAU8=
+		</data>
 		<key>Resources/KSPlayer_KSPlayer.bundle/Shaders.metal</key>
 		<data>
 		ZIoDIqcSlPM3yE7WWjuP9sdkAU8=
@@ -49,6 +57,42 @@
 		ZwrHCzcUqgD+v0+9BlObikubI6o=
 		</data>
 		<key>Resources/Rift_Rift.bundle/Resources/RIFE.mlpackage/Manifest.json</key>
+		<data>
+		C+jckmdx6iMjqnwaRXd8PXc4ED8=
+		</data>
+		<key>Resources/Rift_Rift.bundle/Resources/rift-logo.pdf</key>
+		<data>
+		tZMHVp1jnF1Lz+oVplEtlP/WnTg=
+		</data>
+		<key>Resources/Rift_Rift.bundle/Resources/rift-logo.png</key>
+		<data>
+		tZwWazp62BEuVQYJ8EC3iopZ7go=
+		</data>
+		<key>Resources/Rift_Rift.bundle/Resources/rift-logo.svg</key>
+		<data>
+		UHOEqGIBuBUYvX+E9XepBdOf2Us=
+		</data>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/FramePlusMEMC.metal</key>
+		<data>
+		R3pNSfqXSQCPjaNc8WWPigjWuYY=
+		</data>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/Resources/.DS_Store</key>
+		<data>
+		GrtwTU4HAmkQNV7Z7kPHo/x0pxE=
+		</data>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/Resources/.keep</key>
+		<data>
+		rcg7GeeTSRscbqD9i0bNnzLlkvw=
+		</data>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/Resources/RIFE.mlpackage/Data/com.apple.CoreML/model.mlmodel</key>
+		<data>
+		Pu9LaBshyFjb4jEc04AtGRFCIpY=
+		</data>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/Resources/RIFE.mlpackage/Data/com.apple.CoreML/weights/weight.bin</key>
+		<data>
+		ZwrHCzcUqgD+v0+9BlObikubI6o=
+		</data>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/Resources/RIFE.mlpackage/Manifest.json</key>
 		<data>
 		C+jckmdx6iMjqnwaRXd8PXc4ED8=
 		</data>
@@ -291,6 +335,20 @@
 			gKHF1DfWkXCgTGeZFxc9Gf4BGXaoHulXcZK9V4EjKtY=
 			</data>
 		</dict>
+		<key>Resources/KSPlayer_KSPlayer.bundle/KSPlayer_KSPlayer.bundle/Info.plist</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			gKHF1DfWkXCgTGeZFxc9Gf4BGXaoHulXcZK9V4EjKtY=
+			</data>
+		</dict>
+		<key>Resources/KSPlayer_KSPlayer.bundle/KSPlayer_KSPlayer.bundle/Shaders.metal</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			MmOsGrfOk+n71M9msS/hhiNG3F62H5Rhu76eG8pRl/g=
+			</data>
+		</dict>
 		<key>Resources/KSPlayer_KSPlayer.bundle/Shaders.metal</key>
 		<dict>
 			<key>hash2</key>
@@ -355,6 +413,62 @@
 			</data>
 		</dict>
 		<key>Resources/Rift_Rift.bundle/Resources/RIFE.mlpackage/Manifest.json</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			he4Tp2vL/cpeSBsLc8DTPjH3T7/atdcxbm0YEpVKut8=
+			</data>
+		</dict>
+		<key>Resources/Rift_Rift.bundle/Resources/rift-logo.pdf</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			B0xbHtnk28VAoqbVEh0bq0Eok2jA12Jg9pT15YStDas=
+			</data>
+		</dict>
+		<key>Resources/Rift_Rift.bundle/Resources/rift-logo.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			y04VCEjsaNIbeTgiSrVl8yAfuHud2ebP6wPg7AMURWc=
+			</data>
+		</dict>
+		<key>Resources/Rift_Rift.bundle/Resources/rift-logo.svg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Bq8CTHGOkWLOcpBH8BZdbeOdDe2Z+qrjAEMQtkeelMw=
+			</data>
+		</dict>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/FramePlusMEMC.metal</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			vzE1vcF9TwS1XDIKn3dQGDePJYD5FqJbkaWgo6iqCuc=
+			</data>
+		</dict>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/Resources/.keep</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			AbpHGcgLb+kRsJGnwFEktk7uzpZOCcBY74+YBdrKVGs=
+			</data>
+		</dict>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/Resources/RIFE.mlpackage/Data/com.apple.CoreML/model.mlmodel</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			xM1rZ4+3Lt6zedVzuRFHNqt2LsvpGGydDH6ZeSoCdjA=
+			</data>
+		</dict>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/Resources/RIFE.mlpackage/Data/com.apple.CoreML/weights/weight.bin</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Xak1vj7RuGSqMymlzE1kqlEvXrKY9SbHLIRC6Q259Qk=
+			</data>
+		</dict>
+		<key>Resources/Rift_Rift.bundle/Rift_Rift.bundle/Resources/RIFE.mlpackage/Manifest.json</key>
 		<dict>
 			<key>hash2</key>
 			<data>

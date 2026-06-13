@@ -2,19 +2,55 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
 
+// MARK: - App icon from SVG
+
+private struct RiftLogo: View {
+    var body: some View {
+        if let bundleURL = Bundle.main.url(forResource: "Rift_Rift", withExtension: "bundle"),
+           let bundle = Bundle(url: bundleURL),
+           let url = bundle.url(forResource: "rift-logo", withExtension: "svg"),
+           let image = NSImage(contentsOf: url) {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 160, height: 160)
+        }
+    }
+}
+
+// MARK: - Ambient particle for cinematic atmosphere
+
+private struct AmbientParticle: Identifiable {
+    let id = UUID()
+    var x: CGFloat
+    var y: CGFloat
+    var size: CGFloat
+    var speed: CGFloat
+    var opacity: Double
+    var delay: Double
+}
+
 struct ContentView: View {
     @StateObject private var state = PlayerState()
     @State private var isDropTargeted = false
 
-    // Control visibility and hover states for premium auto-hide behavior
     @State private var areControlsVisible = true
     @State private var isHoveringControls = false
     @State private var hideControlsTask: Task<Void, Never>? = nil
     @State private var mouseEventMonitor: Any? = nil
 
+    @State private var particles: [AmbientParticle] = []
+    @State private var promptPulse: CGFloat = 0
+
     var body: some View {
         ZStack {
             appBackdrop
+
+            if !state.hasVideo {
+                ambientParticles
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
 
             if state.hasVideo {
                 Group {
@@ -60,6 +96,12 @@ struct ContentView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
             }
 
+            if !state.hasVideo {
+                filmGrainOverlay
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+
             VStack {
                 Spacer()
 
@@ -85,6 +127,10 @@ struct ContentView: View {
         .onAppear {
             setupMouseMonitor()
             handleOpenURLs(AppDelegate.takePendingOpenURLs())
+            generateParticles()
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                promptPulse = 1.0
+            }
         }
         .onDisappear {
             cleanupMouseMonitor()
@@ -145,13 +191,52 @@ struct ContentView: View {
         }
     }
 
+    private func generateParticles() {
+        var newParticles: [AmbientParticle] = []
+        for _ in 0..<96 {
+            newParticles.append(AmbientParticle(
+                x: CGFloat.random(in: 0...1),
+                y: CGFloat.random(in: 0...1),
+                size: CGFloat.random(in: 1.5...5.0),
+                speed: CGFloat.random(in: 0.08...0.35),
+                opacity: Double.random(in: 0.12...0.55),
+                delay: Double.random(in: 0...20)
+            ))
+        }
+        particles = newParticles
+    }
+
+    private var ambientParticles: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            Canvas { context, size in
+                for p in particles {
+                    let drift = sin(time * 0.25 + p.delay * 1.7) * 28
+                    let rise = fmod(time * p.speed + p.delay * 25, size.height * 1.4)
+                    let xPos = (p.x * size.width * 0.9 + size.width * 0.05) + drift
+                    let yPos = size.height - rise + size.height * 0.2
+                    let breathe = 0.5 + 0.5 * sin(time * 0.4 + p.delay * 2.3)
+                    let particleOpacity = p.opacity * breathe
+
+                    var dotContext = context
+                    dotContext.opacity = particleOpacity
+                    dotContext.fill(
+                        Path(ellipseIn: CGRect(x: xPos, y: yPos, width: p.size, height: p.size)),
+                        with: .color(Color(red: 0.55, green: 0.78, blue: 1.0))
+                    )
+                }
+            }
+        }
+        .drawingGroup()
+    }
+
     private var appBackdrop: some View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.015, green: 0.045, blue: 0.105),
-                    Color(red: 0.025, green: 0.090, blue: 0.210),
-                    Color(red: 0.010, green: 0.030, blue: 0.075)
+                    Color(red: 0.010, green: 0.035, blue: 0.095),
+                    Color(red: 0.018, green: 0.075, blue: 0.190),
+                    Color(red: 0.008, green: 0.025, blue: 0.065)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -159,90 +244,160 @@ struct ContentView: View {
 
             RadialGradient(
                 colors: [
-                    Color(red: 0.18, green: 0.38, blue: 0.82).opacity(0.34),
+                    Color(red: 0.22, green: 0.42, blue: 0.88).opacity(0.28),
                     .clear
                 ],
                 center: .topTrailing,
-                startRadius: 80,
-                endRadius: 740
+                startRadius: 60,
+                endRadius: 680
             )
 
             RadialGradient(
                 colors: [
-                    Color(red: 0.04, green: 0.18, blue: 0.46).opacity(0.50),
+                    Color(red: 0.03, green: 0.14, blue: 0.42).opacity(0.45),
                     .clear
                 ],
                 center: .center,
-                startRadius: 140,
-                endRadius: 780
+                startRadius: 100,
+                endRadius: 720
+            )
+
+            RadialGradient(
+                colors: [
+                    Color(red: 0.55, green: 0.78, blue: 1.0).opacity(0.04),
+                    .clear
+                ],
+                center: .bottom,
+                startRadius: 40,
+                endRadius: 500
             )
         }
         .ignoresSafeArea()
+    }
+
+    private var filmGrainOverlay: some View {
+        TimelineView(.animation(paused: false)) { timeline in
+            let seed = Int(timeline.date.timeIntervalSinceReferenceDate * 24)
+            Canvas { context, size in
+                for row in 0..<Int(size.height / 4) {
+                    for col in 0..<Int(size.width / 3) {
+                        let hash = seed ^ (row * 137) ^ (col * 251)
+                        let gray = Double((hash & 0xFF)) / 512.0
+                        let rect = CGRect(
+                            x: CGFloat(col) * 3 + CGFloat.random(in: -0.5...0.5),
+                            y: CGFloat(row) * 4 + CGFloat.random(in: -0.5...0.5),
+                            width: 2.5,
+                            height: 3.5
+                        )
+                        context.fill(
+                            Path(rect),
+                            with: .color(.white.opacity(gray * 0.06))
+                        )
+                    }
+                }
+            }
+            .blendMode(.overlay)
+        }
     }
 
     private var openVideoPrompt: some View {
         Button {
             state.openVideo()
         } label: {
-            VStack(spacing: 22) {
+            VStack(spacing: 40) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 27, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 27, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [.white.opacity(0.14), .blue.opacity(0.05)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 27, style: .continuous)
-                                .stroke(.white.opacity(isDropTargeted ? 0.42 : 0.18), lineWidth: 1)
-                        }
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color(red: 0.25, green: 0.50, blue: 1.0).opacity(0.20 + promptPulse * 0.15),
+                                    Color(red: 0.10, green: 0.22, blue: 0.70).opacity(0.06 + promptPulse * 0.06),
+                                    .clear
+                                ],
+                                center: .center,
+                                startRadius: 10 + promptPulse * 20,
+                                endRadius: 110 + promptPulse * 30
+                            )
+                        )
+                        .frame(width: 220 + promptPulse * 30, height: 220 + promptPulse * 30)
+                        .blur(radius: 6)
+                        .scaleEffect(isDropTargeted ? 1.35 : 1)
 
-                    Image(systemName: "folder")
-                        .font(.system(size: 56, weight: .regular))
-                        .foregroundStyle(
+                    Circle()
+                        .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    Color(red: 0.42, green: 0.70, blue: 1.0),
-                                    Color(red: 0.16, green: 0.48, blue: 0.95)
+                                    Color(red: 0.50, green: 0.75, blue: 1.0).opacity(0.30 + promptPulse * 0.20),
+                                    Color(red: 0.20, green: 0.44, blue: 0.90).opacity(0.06 + promptPulse * 0.06),
+                                    Color(red: 0.50, green: 0.75, blue: 1.0).opacity(0.15 + promptPulse * 0.15)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.2 + promptPulse * 1.0
+                        )
+                        .frame(width: 180 + promptPulse * 16, height: 180 + promptPulse * 16)
+
+                    Circle()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.40, green: 0.65, blue: 1.0).opacity(0.08 + promptPulse * 0.10),
+                                    .clear,
+                                    Color(red: 0.40, green: 0.65, blue: 1.0).opacity(0.04 + promptPulse * 0.06)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
-                            )
+                            ),
+                            lineWidth: 0.5 + promptPulse * 0.6
                         )
+                        .frame(width: 240 + promptPulse * 20, height: 240 + promptPulse * 20)
+
+                    RiftLogo()
+
+                    RoundedRectangle(cornerRadius: 60, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.50, green: 0.75, blue: 1.0).opacity(isDropTargeted ? 0.30 : 0.06),
+                                    Color(red: 0.20, green: 0.44, blue: 0.90).opacity(isDropTargeted ? 0.15 : 0.02),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: isDropTargeted ? 2 : 1
+                        )
+                        .frame(width: 112, height: 76)
+                        .offset(y: 78)
+                        .opacity(isDropTargeted ? 1 : 0.5)
                 }
-                .frame(width: 142, height: 130)
-                .shadow(color: .black.opacity(0.18), radius: 24, x: 0, y: 18)
+                .frame(width: 280, height: 280)
+                .shadow(color: Color(red: 0.20, green: 0.45, blue: 0.95).opacity(0.15), radius: 50, x: 0, y: 20)
 
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     Text("Abrir video")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.96))
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
 
-                    Text("Arrastra un archivo de video aqui\no haz clic para seleccionar")
-                        .font(.system(size: 19, weight: .regular))
+                    Text("Arrastra un archivo hasta aqui\no haz clic para explorar")
+                        .font(.system(size: 15, weight: .regular))
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
-                        .foregroundStyle(.white.opacity(0.66))
+                        .foregroundStyle(.white.opacity(0.48))
 
                     if let statusMessage = state.statusMessage {
                         Text(statusMessage)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(Color(red: 0.40, green: 0.66, blue: 1.0))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color(red: 0.45, green: 0.70, blue: 1.0))
                             .padding(.top, 4)
                     }
                 }
             }
-            .scaleEffect(isDropTargeted ? 1.04 : 1)
+            .scaleEffect(isDropTargeted ? 1.03 : 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.bottom, 130)
+        .padding(.bottom, 80)
     }
 
     private var videoVignette: some View {
