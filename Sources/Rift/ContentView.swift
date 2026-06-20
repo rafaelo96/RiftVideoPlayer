@@ -42,6 +42,12 @@ struct ContentView: View {
     @State private var particles: [AmbientParticle] = []
     @State private var promptPulse: CGFloat = 0
 
+    @State private var controlsPosition: CGPoint = .zero
+    @State private var controlsDrag: CGSize = .zero
+    @State private var controlsSize: CGSize = .zero
+    @State private var isPositionInitialized = false
+    @State private var isDraggingControls = false
+
     var body: some View {
         ZStack {
             appBackdrop
@@ -102,18 +108,62 @@ struct ContentView: View {
                     .allowsHitTesting(false)
             }
 
-            VStack {
-                Spacer()
-
+            GeometryReader { geometry in
                 ZStack {
                     controlsContrastField
 
                     PlayerControlsView(state: state)
                 }
-                .padding(.horizontal, 32)
-                .padding(.bottom, 34)
                 .opacity(areControlsVisible ? 1.0 : 0.0)
-                .offset(y: areControlsVisible ? 0 : 12)
+                .scaleEffect(areControlsVisible ? 1 : 0.96)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.onAppear { controlsSize = proxy.size }
+                    }
+                }
+                .position(
+                    x: controlsPosition.x + controlsDrag.width,
+                    y: controlsPosition.y + controlsDrag.height
+                )
+                .scaleEffect(isDraggingControls ? 0.98 : 1)
+                .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isDraggingControls)
+                .onAppear {
+                    guard !isPositionInitialized else { return }
+                    controlsPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height - 82)
+                    isPositionInitialized = true
+                }
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            controlsDrag = value.translation
+                            isDraggingControls = true
+                        }
+                        .onEnded { value in
+                            let margin: CGFloat = 8
+                            let halfW = controlsSize.width / 2
+                            let halfH = controlsSize.height / 2
+                            let w = geometry.size.width
+                            let h = geometry.size.height
+                            var newX = controlsPosition.x + value.translation.width
+                            var newY = controlsPosition.y + value.translation.height
+                            newX = max(halfW + margin, min(w - halfW - margin, newX))
+                            newY = max(halfH + margin, min(h - halfH - margin, newY))
+                            controlsPosition = CGPoint(x: newX, y: newY)
+                            controlsDrag = .zero
+                            isDraggingControls = false
+                        }
+                )
+                .simultaneousGesture(
+                    TapGesture(count: 2)
+                        .onEnded {
+                            let w = geometry.size.width
+                            let h = geometry.size.height
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                controlsPosition = CGPoint(x: w / 2, y: h - 82)
+                                controlsDrag = .zero
+                            }
+                        }
+                )
                 .onHover { hovering in
                     isHoveringControls = hovering
                     resetHideTimer()
@@ -122,8 +172,8 @@ struct ContentView: View {
         }
         .background(appBackdrop)
         .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTargeted, perform: handleDrop)
-        .animation(.easeInOut(duration: 0.24), value: state.hasVideo)
-        .animation(.easeInOut(duration: 0.18), value: isDropTargeted)
+        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: state.hasVideo)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isDropTargeted)
         .onAppear {
             setupMouseMonitor()
             handleOpenURLs(AppDelegate.takePendingOpenURLs())
@@ -146,7 +196,6 @@ struct ContentView: View {
     }
 
     private var usesMetalRenderer: Bool {
-        // Keep disabled and Frame+ playback on the same color pipeline.
         !state.usesNativeVideoLayer
     }
 
@@ -169,7 +218,7 @@ struct ContentView: View {
 
     private func resetHideTimer() {
         if !areControlsVisible {
-            withAnimation(.easeInOut(duration: 0.22)) {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
                 areControlsVisible = true
             }
             NSCursor.unhide()
@@ -183,8 +232,8 @@ struct ContentView: View {
         hideControlsTask = Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
-            
-            withAnimation(.easeInOut(duration: 0.32)) {
+
+            withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
                 areControlsVisible = false
             }
             NSCursor.hide()
@@ -232,11 +281,17 @@ struct ContentView: View {
 
     private var appBackdrop: some View {
         ZStack {
+            NativeVisualEffectView(
+                material: .hudWindow,
+                blendingMode: .behindWindow
+            )
+            .ignoresSafeArea()
+
             LinearGradient(
                 colors: [
-                    Color(red: 0.010, green: 0.035, blue: 0.095),
-                    Color(red: 0.018, green: 0.075, blue: 0.190),
-                    Color(red: 0.008, green: 0.025, blue: 0.065)
+                    Color(red: 0.010, green: 0.035, blue: 0.095).opacity(0.88),
+                    Color(red: 0.018, green: 0.075, blue: 0.190).opacity(0.82),
+                    Color(red: 0.008, green: 0.025, blue: 0.065).opacity(0.88)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -244,7 +299,7 @@ struct ContentView: View {
 
             RadialGradient(
                 colors: [
-                    Color(red: 0.22, green: 0.42, blue: 0.88).opacity(0.28),
+                    Color(red: 0.22, green: 0.42, blue: 0.88).opacity(0.20),
                     .clear
                 ],
                 center: .topTrailing,
@@ -254,7 +309,7 @@ struct ContentView: View {
 
             RadialGradient(
                 colors: [
-                    Color(red: 0.03, green: 0.14, blue: 0.42).opacity(0.45),
+                    Color(red: 0.03, green: 0.14, blue: 0.42).opacity(0.30),
                     .clear
                 ],
                 center: .center,
@@ -264,7 +319,7 @@ struct ContentView: View {
 
             RadialGradient(
                 colors: [
-                    Color(red: 0.55, green: 0.78, blue: 1.0).opacity(0.04),
+                    Color(red: 0.55, green: 0.78, blue: 1.0).opacity(0.03),
                     .clear
                 ],
                 center: .bottom,
@@ -417,7 +472,7 @@ struct ContentView: View {
         LinearGradient(
             colors: [
                 .clear,
-                Color(red: 0.04, green: 0.05, blue: 0.18).opacity(0.16),
+                Color(red: 0.06, green: 0.10, blue: 0.22).opacity(0.20),
                 .black.opacity(0.08)
             ],
             startPoint: .top,
@@ -449,7 +504,7 @@ struct ContentView: View {
                 .padding(.bottom, areControlsVisible ? 154 : 58)
         }
         .allowsHitTesting(false)
-        .animation(.easeInOut(duration: 0.18), value: areControlsVisible)
+        .animation(.spring(response: 0.3, dampingFraction: 0.82), value: areControlsVisible)
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {

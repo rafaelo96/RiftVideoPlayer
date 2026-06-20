@@ -3,14 +3,14 @@ import SwiftUI
 
 struct NativeVisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .hudWindow
-    var blendingMode: NSVisualEffectView.BlendingMode = .withinWindow
+    var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blendingMode
         view.state = .active
-        view.isEmphasized = true
+        view.isEmphasized = false
         return view
     }
 
@@ -18,6 +18,6 @@ struct NativeVisualEffectView: NSViewRepresentable {
         view.material = material
         view.blendingMode = blendingMode
         view.state = .active
-        view.isEmphasized = true
+        view.isEmphasized = false
     }
 }
