@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import CryptoKit
+import IOKit.pwr_mgt
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -15,7 +16,11 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     let player = AVPlayer()
 
     @Published var fileName = "Video.mp4"
-    @Published var isPlaying = false
+    @Published var isPlaying = false {
+        didSet {
+            if isPlaying { preventSleep() } else { allowSleep() }
+        }
+    }
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var volume: Double = 0.72
@@ -52,6 +57,24 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     @Published var playbackBackend: PlaybackBackend = .avFoundation
     @Published var directPlaybackURL: URL?
     @Published var usesNativeVideoLayer = false
+
+    private var sleepAssertionID: IOPMAssertionID = 0
+
+    private func preventSleep() {
+        guard sleepAssertionID == 0 else { return }
+        IOPMAssertionCreateWithName(
+            kIOPMAssertPreventUserIdleDisplaySleep as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn),
+            "Rift reproduciendo video" as CFString,
+            &sleepAssertionID
+        )
+    }
+
+    private func allowSleep() {
+        guard sleepAssertionID != 0 else { return }
+        IOPMAssertionRelease(sleepAssertionID)
+        sleepAssertionID = 0
+    }
 
     private var timeObserver: Any?
     private var itemStatusObservation: NSKeyValueObservation?

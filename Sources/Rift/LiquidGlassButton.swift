@@ -14,33 +14,77 @@ struct LiquidGlassButton: View {
     var size: Size = .compact
     var action: () -> Void
 
+    @State private var isPressed = false
+    @State private var isHovered = false
+
     var body: some View {
-        // One button component supports both SF Symbol controls and compact text toggles.
-        Button(action: action) {
+        Button(action: {
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.6)) {
+                isPressed = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.spring(response: 0.22, dampingFraction: 0.6)) {
+                    isPressed = false
+                }
+            }
+            action()
+        }) {
             label
-            .foregroundStyle(isActive ? .white : .white.opacity(0.82))
+            .foregroundStyle(isActive ? .white : isHovered ? .white.opacity(0.92) : .white.opacity(0.76))
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
                         isActive
                             ? AnyShapeStyle(LinearGradient(
                                 colors: [
-                                    Color(red: 0.16, green: 0.50, blue: 0.96).opacity(0.26),
-                                    Color(red: 0.10, green: 0.34, blue: 0.86).opacity(0.18)
+                                    Color(red: 0.16, green: 0.50, blue: 0.96).opacity(0.30),
+                                    Color(red: 0.10, green: 0.34, blue: 0.86).opacity(0.20),
+                                    Color(red: 0.55, green: 0.78, blue: 1.0).opacity(0.06)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ))
-                            : AnyShapeStyle(.white.opacity(size == .metric ? 0.045 : 0.0))
+                            : AnyShapeStyle(
+                                isHovered
+                                    ? .white.opacity(0.06)
+                                    : .white.opacity(size == .metric ? 0.05 : 0.0)
+                            )
                     )
             }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(.white.opacity(size == .metric ? 0.18 : 0.0), lineWidth: 1)
+                    .stroke(
+                        isActive
+                            ? AnyShapeStyle(LinearGradient(
+                                colors: [
+                                    Color(red: 0.36, green: 0.66, blue: 1.0).opacity(0.44),
+                                    Color(red: 0.16, green: 0.48, blue: 0.95).opacity(0.22)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ))
+                            : AnyShapeStyle(
+                                isHovered
+                                    ? .white.opacity(0.18)
+                                    : .white.opacity(size == .metric ? 0.18 : 0.0)
+                            ),
+                        lineWidth: isActive ? 1.2 : (isHovered ? 0.8 : (size == .metric ? 1 : 0))
+                    )
             }
-            .shadow(color: isActive ? .blue.opacity(0.16) : .black.opacity(0.06), radius: 9, x: 0, y: 5)
+            .shadow(
+                color: isActive ? Color(red: 0.30, green: 0.55, blue: 1.0).opacity(0.20) : .black.opacity(0.08),
+                radius: isActive ? 12 : 6,
+                x: 0,
+                y: isActive ? 6 : 4
+            )
+            .scaleEffect(isPressed ? 0.92 : (isHovered ? 1.04 : 1))
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isHovered = hovering
+            }
+        }
     }
 
     @ViewBuilder

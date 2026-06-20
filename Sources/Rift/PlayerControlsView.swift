@@ -7,7 +7,7 @@ struct PlayerControlsView: View {
     @State private var dragSliderValue: Double = 0
 
     var body: some View {
-        LiquidGlassPanel(cornerRadius: 18) {
+        LiquidGlassPanel(cornerRadius: 18, blendsWithWindow: true) {
             VStack(spacing: 8) {
                 HStack {
                     Spacer(minLength: 24)
@@ -31,12 +31,14 @@ struct PlayerControlsView: View {
             .padding(.bottom, 11)
         }
         .frame(maxWidth: 980)
-        .animation(.easeInOut(duration: 0.22), value: state.isPlaying)
-        .animation(.easeInOut(duration: 0.22), value: state.playbackRate)
-        .animation(.easeInOut(duration: 0.22), value: state.fpsMode)
-        .animation(.easeInOut(duration: 0.22), value: state.interpolationMode)
-        .animation(.easeInOut(duration: 0.22), value: state.audioTracks.count)
+        .animation(.spring(response: 0.32, dampingFraction: 0.78), value: state.isPlaying)
+        .animation(.spring(response: 0.32, dampingFraction: 0.78), value: state.playbackRate)
+        .animation(.spring(response: 0.32, dampingFraction: 0.78), value: state.fpsMode)
+        .animation(.spring(response: 0.32, dampingFraction: 0.78), value: state.interpolationMode)
+        .animation(.spring(response: 0.32, dampingFraction: 0.78), value: state.audioTracks.count)
     }
+
+    // MARK: - Timeline
 
     private var timeline: some View {
         HStack(spacing: 10) {
@@ -50,7 +52,9 @@ struct PlayerControlsView: View {
                 ),
                 in: 0...max(state.duration, 1),
                 onEditingChanged: { editing in
-                    isDraggingSlider = editing
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                        isDraggingSlider = editing
+                    }
                     if editing {
                         dragSliderValue = state.currentTime
                     } else {
@@ -68,12 +72,12 @@ struct PlayerControlsView: View {
         .foregroundStyle(.white.opacity(0.86))
     }
 
+    // MARK: - Playback Info
+
     private var playbackInfoCluster: some View {
         HStack(spacing: 12) {
             volumeControl
-
             optionDivider
-
             fpsReadout
         }
         .frame(minWidth: 210, alignment: .leading)
@@ -81,10 +85,9 @@ struct PlayerControlsView: View {
 
     private var volumeControl: some View {
         HStack(spacing: 8) {
-            Image(systemName: volumeIcon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.88))
-                .frame(width: 18)
+            GlassIconButton(systemName: volumeIcon, size: 14, action: {
+                state.setVolume(state.volume > 0 ? 0 : 0.68)
+            })
 
             Slider(
                 value: Binding(
@@ -101,8 +104,10 @@ struct PlayerControlsView: View {
 
     private var fpsReadout: some View {
         HStack(spacing: 6) {
-            Image(systemName: state.fpsMode.isActive ? "waveform.path.ecg" : "display")
-                .font(.system(size: 12, weight: .semibold))
+            Image(systemName: state.fpsMode.isActive
+                ? "gauge.open.with.lines.needle.33percent"
+                : "display")
+                .font(.system(size: 11, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(String(format: "%.0f", state.displayRenderingFPS)) FPS")
@@ -111,7 +116,7 @@ struct PlayerControlsView: View {
 
                 Text(framePlusStateTitle)
                     .font(.system(size: 8, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.62))
+                    .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(1)
             }
         }
@@ -119,42 +124,47 @@ struct PlayerControlsView: View {
         .frame(width: 76, alignment: .leading)
     }
 
+    // MARK: - Transport Controls
+
     private var transportControls: some View {
         HStack(spacing: 18) {
-            iconButton("gobackward.10") {
+            GlassIconButton(systemName: "gobackward.10", size: 15, action: {
                 state.seek(by: -10)
-            }
+            })
 
             Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
+                withAnimation(.spring(response: 0.22, dampingFraction: 0.6)) {
                     state.togglePlay()
                 }
             } label: {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
+                    .frame(width: 44, height: 44)
                     .background {
                         Circle()
-                            .fill(.white.opacity(0.13))
+                            .fill(.white.opacity(0.10))
                             .overlay {
                                 Circle()
-                                    .stroke(.white.opacity(0.22), lineWidth: 1)
+                                    .strokeBorder(.white.opacity(0.15), lineWidth: 0.5)
                             }
                     }
-                    .shadow(color: accentColor.opacity(0.22), radius: 10, x: 0, y: 5)
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.space, modifiers: [])
+            .scaleEffect(state.isPlaying ? 1 : 0.96)
+            .animation(.spring(response: 0.28, dampingFraction: 0.7), value: state.isPlaying)
 
-            iconButton("goforward.10") {
+            GlassIconButton(systemName: "goforward.10", size: 15, action: {
                 state.seek(by: 10)
-            }
+            })
         }
     }
 
+    // MARK: - Options Bar
+
     private var optionsBar: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             interpolationButton
             speedButton
             visualButton
@@ -165,20 +175,15 @@ struct PlayerControlsView: View {
 
             subtitleButton
         }
-        .padding(4)
-        .background {
-            Capsule()
-                .fill(.white.opacity(0.045))
-        }
-        .overlay {
-            Capsule()
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-        }
+        .padding(5)
+        .background(GlassCapsule())
     }
+
+    // MARK: - Option Buttons
 
     private var interpolationButton: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.18)) {
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
                 guard state.interpolationMode == .disabled else {
                     state.setInterpolationMode(.disabled)
                     return
@@ -186,10 +191,15 @@ struct PlayerControlsView: View {
                 state.setInterpolationMode(.motion2Intense)
             }
         } label: {
-            simplePill(
+            glassPill(
                 title: motionTitle,
-                systemName: state.isFramePlusPreparing ? "hourglass" : (state.interpolationMode == .disabled ? "plus.circle" : "plus.circle.fill"),
-                isActive: state.interpolationMode != .disabled
+                systemName: state.isFramePlusPreparing
+                    ? "hourglass"
+                    : (state.interpolationMode == .disabled
+                        ? "rectangle.on.rectangle"
+                        : "rectangle.on.rectangle.fill"),
+                isActive: state.interpolationMode != .disabled,
+                hint: "Interpolación de frames"
             )
         }
         .buttonStyle(.plain)
@@ -197,12 +207,15 @@ struct PlayerControlsView: View {
 
     private var speedButton: some View {
         Button {
-            state.cyclePlaybackRate()
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
+                state.cyclePlaybackRate()
+            }
         } label: {
-            simplePill(
+            glassPill(
                 title: speedTitle,
-                systemName: "speedometer",
-                isActive: state.playbackRate != 1.0
+                systemName: "gauge.with.dots.needle.33percent",
+                isActive: state.playbackRate != 1.0,
+                hint: "Velocidad de reproducción"
             )
         }
         .buttonStyle(.plain)
@@ -210,14 +223,15 @@ struct PlayerControlsView: View {
 
     private var visualButton: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.18)) {
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
                 state.toggleVisualEnhancements()
             }
         } label: {
-            simplePill(
+            glassPill(
                 title: "Visual",
-                systemName: state.visualEnhancementsEnabled ? "sparkle.magnifyingglass" : "sparkle.magnifyingglass",
-                isActive: state.visualEnhancementsEnabled
+                systemName: "sparkle.magnifyingglass",
+                isActive: state.visualEnhancementsEnabled,
+                hint: "Mejoras visuales"
             )
         }
         .buttonStyle(.plain)
@@ -231,16 +245,19 @@ struct PlayerControlsView: View {
         return Menu {
             ForEach(state.audioTracks) { track in
                 Button {
-                    state.selectAudioTrack(track.id)
+                    withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
+                        state.selectAudioTrack(track.id)
+                    }
                 } label: {
                     optionMenuRow(title: track.label, selected: track.id == state.selectedAudioTrackIndex)
                 }
             }
         } label: {
-            optionPill(
+            glassPill(
                 title: activeLabel,
-                systemName: "person.wave.2",
-                isActive: state.selectedAudioTrackIndex != 0
+                systemName: "music.note.list",
+                isActive: state.selectedAudioTrackIndex != 0,
+                hint: "Pista de audio"
             )
         }
         .menuStyle(.borderlessButton)
@@ -252,68 +269,65 @@ struct PlayerControlsView: View {
 
         return Menu {
             Button {
-                state.selectPipelineTrack(nil)
+                withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
+                    state.selectPipelineTrack(nil)
+                }
             } label: {
                 optionMenuRow(title: "None", selected: state.selectedSubtitleTrack == nil)
             }
 
             ForEach(subtitleTracks) { track in
                 Button {
-                    state.selectPipelineTrack(track)
+                    withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
+                        state.selectPipelineTrack(track)
+                    }
                 } label: {
                     optionMenuRow(title: track.label, selected: state.selectedSubtitleTrack == track)
                 }
             }
         } label: {
-            optionPill(
+            glassPill(
                 title: state.selectedSubtitleTrack?.label ?? "Subs",
                 systemName: "captions.bubble",
-                isActive: state.selectedSubtitleTrack != nil
+                isActive: state.selectedSubtitleTrack != nil,
+                hint: "Subtítulos"
             )
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
     }
 
-    private func optionPill(title: String, systemName: String, isActive: Bool) -> some View {
-        HStack(spacing: 6) {
+    // MARK: - Glass Pill
+
+    private func glassPill(title: String, systemName: String, isActive: Bool, hint: String) -> some View {
+        HStack(spacing: 5) {
             Image(systemName: systemName)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 14)
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 13)
 
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10.5, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
         }
-        .foregroundStyle(isActive ? .white : .white.opacity(0.76))
-        .frame(width: 96, height: 28)
+        .foregroundStyle(isActive ? .white : .white.opacity(0.65))
+        .frame(width: 94, height: 28)
         .background {
             Capsule()
-                .fill(isActive ? accentColor.opacity(0.22) : .white.opacity(0.04))
+                .fill(isActive ? accentColor.opacity(0.18) : .white.opacity(0.04))
         }
         .overlay {
             Capsule()
-                .stroke(isActive ? accentColor.opacity(0.36) : .white.opacity(0.10), lineWidth: 1)
+                .strokeBorder(
+                    isActive ? accentColor.opacity(0.35) : .white.opacity(0.08),
+                    lineWidth: 0.5
+                )
         }
         .contentShape(Capsule())
+        .help(hint)
     }
 
-    private func simplePill(title: String, systemName: String, isActive: Bool) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemName)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 14)
-
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-        }
-        .foregroundStyle(isActive ? accentColor : .white.opacity(0.76))
-        .frame(height: 28)
-        .contentShape(Rectangle())
-    }
+    // MARK: - Helpers
 
     private func optionMenuRow(title: String, selected: Bool) -> some View {
         Group {
@@ -325,25 +339,10 @@ struct PlayerControlsView: View {
         }
     }
 
-    private func iconButton(_ systemName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.82))
-                .frame(width: 30, height: 30)
-                .background {
-                    Circle()
-                        .fill(.white.opacity(0.045))
-                }
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-    }
-
     private var optionDivider: some View {
         Rectangle()
             .fill(.white.opacity(0.12))
-            .frame(width: 1, height: 24)
+            .frame(width: 0.5, height: 22)
     }
 
     private var accentColor: Color {
@@ -372,5 +371,51 @@ struct PlayerControlsView: View {
         if state.isFramePlusPreRendered { return "60fps listo" }
         if state.interpolationMode == .disabled { return "Desactivado" }
         return state.isArtificialInterpolationActive ? "Interpolando" : "Esperando"
+    }
+}
+
+// MARK: - GlassIconButton
+
+struct GlassIconButton: View {
+    var systemName: String
+    var size: CGFloat = 15
+    var action: () -> Void
+
+    @State private var isPressed = false
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.55)) {
+                isPressed = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.55)) {
+                    isPressed = false
+                }
+            }
+            action()
+        }) {
+            Image(systemName: systemName)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(.white.opacity(isHovered ? 0.92 : 0.70))
+                .frame(width: 32, height: 32)
+                .background {
+                    Circle()
+                        .fill(.white.opacity(isHovered ? 0.08 : 0.03))
+                        .overlay {
+                            Circle()
+                                .strokeBorder(.white.opacity(isHovered ? 0.12 : 0.06), lineWidth: 0.5)
+                        }
+                }
+                .scaleEffect(isPressed ? 0.88 : (isHovered ? 1.06 : 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
     }
 }
