@@ -1,0 +1,70 @@
+/* Hallmark · genre: atmospheric · macrostructure: Marquee Hero · theme: Midnight · enrichment: H7 demo player · nav: N10 · footer: Ft2
+ * Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V4
+ */
+:root {
+  --color-paper: oklch(13% 0.018 252);
+  --color-paper-2: oklch(16% 0.02 252);
+  --color-paper-3: oklch(20% 0.024 252);
+  --color-panel: oklch(18% 0.022 252 / 0.78);
+  --color-panel-solid: oklch(18% 0.022 252);
+  --color-rule: oklch(32% 0.025 252);
+  --color-rule-strong: oklch(42% 0.04 252);
+  --color-ink: oklch(95% 0.01 252);
+  --color-ink-soft: oklch(84% 0.014 252);
+  --color-muted: oklch(69% 0.018 252);
+  --color-dim: oklch(54% 0.018 252);
+  --color-accent: oklch(70% 0.16 245);
+  --color-accent-ink: oklch(98% 0.006 245);
+  --color-accent-soft: oklch(70% 0.16 245 / 0.16);
+  --color-warm: oklch(75% 0.16 62);
+  --color-warm-soft: oklch(75% 0.16 62 / 0.14);
+  --color-success: oklch(74% 0.14 154);
+  --color-danger: oklch(65% 0.18 28);
+  --color-focus: oklch(78% 0.15 245);
+
+  --font-display: var(--font-display-family), "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-body-family), "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-family), "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-xs: 0.72rem;
+  --text-sm: 0.86rem;
+  --text-base: 1rem;
+  --text-md: 1.2rem;
+  --text-lg: 1.5rem;
+  --text-xl: 1.875rem;
+  --text-2xl: 2.35rem;
+  --text-3xl: 2.95rem;
+  --text-display: clamp(3.1rem, 8vw + 0.4rem, 6.4rem);
+  --text-display-s: clamp(2.55rem, 5vw + 0.75rem, 4.8rem);
+
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+  --space-4xl: 9rem;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-pill: 999px;
+  --page-max: 1180px;
+  --banner-height: 72px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+
+  --z-base: 1;
+  --z-raised: 10;
+  --z-sticky: 200;
+  --z-modal: 400;
+}

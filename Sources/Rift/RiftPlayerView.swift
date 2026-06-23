@@ -74,7 +74,10 @@ final class MetalVideoView: MTKView {
     }
 
     required init(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        super.init(coder: coder)
+        if device == nil {
+            device = MTLCreateSystemDefaultDevice()
+        }
     }
 
     override func viewDidMoveToWindow() {
