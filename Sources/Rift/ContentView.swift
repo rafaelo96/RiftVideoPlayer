@@ -38,6 +38,7 @@ struct ContentView: View {
     @State private var isHoveringControls = false
     @State private var hideControlsTask: Task<Void, Never>? = nil
     @State private var mouseEventMonitor: Any? = nil
+    @State private var keyboardEventMonitor: Any? = nil
 
     @State private var particles: [AmbientParticle] = []
     @State private var promptPulse: CGFloat = 0
@@ -176,6 +177,7 @@ struct ContentView: View {
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isDropTargeted)
         .onAppear {
             setupMouseMonitor()
+            setupKeyboardMonitor()
             handleOpenURLs(AppDelegate.takePendingOpenURLs())
             generateParticles()
             withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
@@ -184,6 +186,7 @@ struct ContentView: View {
         }
         .onDisappear {
             cleanupMouseMonitor()
+            cleanupKeyboardMonitor()
             state.cleanup()
         }
         .onChange(of: state.isPlaying) {
@@ -196,7 +199,8 @@ struct ContentView: View {
     }
 
     private var usesMetalRenderer: Bool {
-        !state.usesNativeVideoLayer
+        guard !state.usesNativeVideoLayer else { return false }
+        return MTLCreateSystemDefaultDevice() != nil
     }
 
     private func setupMouseMonitor() {
@@ -214,6 +218,60 @@ struct ContentView: View {
         hideControlsTask?.cancel()
         hideControlsTask = nil
         NSCursor.unhide()
+    }
+
+    private func setupKeyboardMonitor() {
+        keyboardEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+            guard state.hasVideo else { return event }
+
+            switch event.keyCode {
+            case 123: // Left arrow
+                state.seek(by: event.modifierFlags.contains(.shift) ? -60 : -10)
+                return nil
+            case 124: // Right arrow
+                state.seek(by: event.modifierFlags.contains(.shift) ? 60 : 10)
+                return nil
+            case 125: // Down arrow
+                state.setVolume(state.volume - 0.05)
+                return nil
+            case 126: // Up arrow
+                state.setVolume(state.volume + 0.05)
+                return nil
+            case 53: // Escape
+                state.closeVideo()
+                NSCursor.unhide()
+                return nil
+            case 3: // F
+                if !event.modifierFlags.contains(.command) { return event }
+                if let window = NSApp.keyWindow {
+                    window.toggleFullScreen(nil)
+                }
+                return nil
+            case 46: // M
+                if !event.modifierFlags.contains(.command) { return event }
+                state.setVolume(state.volume > 0 ? 0 : 0.72)
+                return nil
+            case 18...21: // Number keys 1-4
+                let speeds: [Float] = [1.0, 1.5, 2.0, 0.5]
+                let idx = Int(event.keyCode - 18)
+                guard idx < speeds.count else { return event }
+                let rate = speeds[idx]
+                state.playbackRate = rate
+                if state.isPlaying {
+                    state.player.rate = rate
+                }
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func cleanupKeyboardMonitor() {
+        if let monitor = keyboardEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyboardEventMonitor = nil
+        }
     }
 
     private func resetHideTimer() {
@@ -430,11 +488,11 @@ struct ContentView: View {
                 .shadow(color: Color(red: 0.20, green: 0.45, blue: 0.95).opacity(0.15), radius: 50, x: 0, y: 20)
 
                 VStack(spacing: 10) {
-                    Text("Abrir video")
+                    Text("Open Video")
                         .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.92))
 
-                    Text("Arrastra un archivo hasta aqui\no haz clic para explorar")
+                    Text("Drop a file here or click to browse")
                         .font(.system(size: 15, weight: .regular))
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
@@ -445,6 +503,13 @@ struct ContentView: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Color(red: 0.45, green: 0.70, blue: 1.0))
                             .padding(.top, 4)
+                    }
+
+                    if let progress = state.conversionProgress {
+                        ProgressView(value: progress, total: 1.0)
+                            .tint(Color(red: 0.36, green: 0.66, blue: 1.0))
+                            .frame(width: 200)
+                            .padding(.top, 2)
                     }
                 }
             }

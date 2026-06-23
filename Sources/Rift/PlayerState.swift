@@ -2,6 +2,7 @@ import AVFoundation
 import AppKit
 import CryptoKit
 import IOKit.pwr_mgt
+import OSLog
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -23,11 +24,18 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     }
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
-    @Published var volume: Double = 0.72
-    @Published var playbackRate: Float = 1.0
-    @Published var fpsMode: FPSMode = .native
+    @Published var volume: Double {
+        didSet { UserDefaults.standard.set(volume, forKey: SettingsKey.volume) }
+    }
+    @Published var playbackRate: Float {
+        didSet { UserDefaults.standard.set(playbackRate, forKey: SettingsKey.playbackRate) }
+    }
+    @Published var fpsMode: FPSMode = .native {
+        didSet { UserDefaults.standard.set(fpsMode.rawValue, forKey: SettingsKey.fpsMode) }
+    }
     @Published var hasVideo = false
     @Published var statusMessage: String?
+    @Published var conversionProgress: Double? = nil
     @Published var videoCodec: String? = nil
     @Published var audioCodec: String? = nil
     @Published var videoResolution: String? = nil
@@ -42,10 +50,14 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     @Published var audioTracks: [AudioTrack] = []
     @Published var selectedAudioTrackIndex: Int = 0
     @Published var url: URL?
-    @Published var interpolationMode: VideoInterpolationPipeline.InterpolationMode = .disabled
+    @Published var interpolationMode: VideoInterpolationPipeline.InterpolationMode = .disabled {
+        didSet { UserDefaults.standard.set(interpolationMode.rawValue, forKey: SettingsKey.interpolationMode) }
+    }
     @Published var isFramePlusPreparing = false
     @Published var isFramePlusPreRendered = false
-    @Published var visualEnhancementsEnabled = false
+    @Published var visualEnhancementsEnabled = false {
+        didSet { UserDefaults.standard.set(visualEnhancementsEnabled, forKey: SettingsKey.visualEnhancements) }
+    }
     @Published var rifeEnabled: Bool = false
     @Published var metrics = PlaybackMetrics()
     @Published var availableTracks: [MediaTrack] = []
@@ -114,12 +126,34 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         return sourceFrameRate ?? 0
     }
 
+    private enum SettingsKey {
+        static let volume = "RiftVolume"
+        static let playbackRate = "RiftPlaybackRate"
+        static let interpolationMode = "RiftInterpolationMode"
+        static let visualEnhancements = "RiftVisualEnhancements"
+        static let fpsMode = "RiftFPSMode"
+    }
+
     override init() {
+        let loadedVolume = UserDefaults.standard.double(forKey: SettingsKey.volume)
+        volume = loadedVolume > 0 ? min(max(loadedVolume, 0), 1) : 0.72
+        let loadedRate = UserDefaults.standard.float(forKey: SettingsKey.playbackRate)
+        playbackRate = loadedRate > 0 ? loadedRate : 1.0
+        let loadedFPSMode = UserDefaults.standard.string(forKey: SettingsKey.fpsMode)
+            .flatMap { FPSMode(rawValue: $0) } ?? .native
+        fpsMode = loadedFPSMode
+        let loadedInterpolation = UserDefaults.standard.string(forKey: SettingsKey.interpolationMode)
+            .flatMap { VideoInterpolationPipeline.InterpolationMode(rawValue: $0) } ?? .disabled
+        interpolationMode = loadedInterpolation
+        visualEnhancementsEnabled = UserDefaults.standard.bool(forKey: SettingsKey.visualEnhancements)
+
         super.init()
         player.volume = Float(volume)
         player.automaticallyWaitsToMinimizeStalling = true
         player.actionAtItemEnd = .none
         addTimeObserver()
+
+        Logger.playback.info("Settings loaded: volume=\(self.volume), rate=\(self.playbackRate), fps=\(self.fpsMode.rawValue), interpolation=\(self.interpolationMode.rawValue)")
 
         if CommandLine.arguments.contains("--fps=60") {
             fpsMode = .flux
@@ -164,6 +198,34 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             self.timeObserver = nil
         }
 
+        conversionProcess?.terminate()
+        conversionProcess = nil
+        hlsSeekTask?.cancel()
+        hlsSeekTask = nil
+        hlsShouldResumePlayback = false
+        itemStatusObservation = nil
+        cleanupConvertedVideo()
+    }
+
+    func closeVideo() {
+        Logger.playback.info("Closing video: \(self.fileName)")
+        player.pause()
+        directPlaybackController?.shutdown()
+        directPlaybackController = nil
+        directPlaybackURL = nil
+        playbackBackend = .avFoundation
+        usesNativeVideoLayer = false
+        knownPlaybackDuration = nil
+        hlsPlaybackOffset = 0
+        cachedSourceMetadataURL = nil
+        cachedSourceStreams = []
+        cachedSourceDuration = nil
+        detachLegibleOutput()
+        player.replaceCurrentItem(with: nil)
+        isPlaying = false
+        currentTime = 0
+        duration = 0
+        hasVideo = false
         conversionProcess?.terminate()
         conversionProcess = nil
         hlsSeekTask?.cancel()
@@ -269,7 +331,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             interpolationMode = .disabled
             rifeEnabled = false
             fpsMode = .native
-            statusMessage = "RIFE no disponible: falta RIFE.mlpackage"
+            statusMessage = NSLocalizedString("RIFE not available: missing RIFE.mlpackage", comment: "")
             applyVisualCompositionIfNeeded()
             return
         }
@@ -437,6 +499,15 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         isHDRContent = false
         metrics = PlaybackMetrics()
 
+        if !url.isFileURL || url.pathExtension.lowercased() == "m3u8" || url.scheme?.lowercased().hasPrefix("http") == true {
+            // Skip validation for HLS streams and non-file URLs
+        } else if !Self.isValidVideoFile(url) {
+            Logger.playback.warning("Invalid video file rejected: \(url.path, privacy: .public)")
+            statusMessage = "El archivo no parece ser un video válido."
+            hasVideo = false
+            return
+        }
+
         if needsConversion(url) {
             Task { @MainActor in
                 await convertAndLoadVideo(url)
@@ -532,7 +603,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
     func directPlaybackDidFail(_ message: String) {
         guard playbackBackend == .directFFmpeg, let sourceURL = directPlaybackURL else { return }
-        statusMessage = "\(message) Preparando compatible..."
+        statusMessage = "\(message) \(NSLocalizedString("Preparing compatible...", comment: ""))"
         directPlaybackController?.shutdown()
         directPlaybackController = nil
         directPlaybackURL = nil
@@ -598,7 +669,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                     if self.retryCompatibleConversionIfNeeded() {
                         return
                     }
-                    self.statusMessage = "No se pudo cargar el video convertido."
+                    self.statusMessage = NSLocalizedString("Could not load converted video", comment: "")
                     self.isPlaying = false
                 @unknown default:
                     break
@@ -631,6 +702,26 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
     private func needsConversion(_ url: URL) -> Bool {
         containerFormatsNeedingConversion.contains(url.pathExtension.lowercased())
+    }
+
+    static func isValidVideoFile(_ url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let header = try? handle.read(upToCount: 16), header.count >= 16 else { return false }
+
+        let bytes = [UInt8](header)
+
+        if bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3 { return true }
+        if bytes[0] == 0x00 && bytes[1] == 0x00 && bytes[2] == 0x00 && bytes[3] == 0x1C { return true }
+        if bytes[0] == 0x66 && bytes[1] == 0x74 && bytes[2] == 0x79 && bytes[3] == 0x70 { return true }
+        if bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 { return true }
+        if bytes[0] == 0x46 && bytes[1] == 0x4C && bytes[2] == 0x56 { return true }
+        if bytes[0] == 0x30 && bytes[1] == 0x26 && bytes[2] == 0xB2 && bytes[3] == 0x75 { return true }
+        if bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70 { return true }
+        if bytes[0] == 0x41 && bytes[1] == 0x56 && bytes[2] == 0x49 && bytes[3] == 0x20 { return true } // AVI2.0
+        if bytes[0] == 0xA6 && bytes[1] == 0xD9 && bytes[2] == 0x00 && bytes[3] == 0xAA { return true } // ASF (WMV)
+
+        return false
     }
 
     private static func cachedCompatibleVideoURL(for sourceURL: URL) -> URL? {
@@ -679,6 +770,41 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         } catch {
             return false
         }
+    }
+
+    private static let maxCacheSizeBytes: UInt64 = 10 * 1024 * 1024 * 1024 // 10 GB
+
+    private static func enforceCacheSizeLimit() {
+        guard let cacheDir = compatibleVideoCacheDirectory() else { return }
+        guard let enumerator = FileManager.default.enumerator(
+            at: cacheDir,
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
+            options: .skipsSubdirectoryDescendants
+        ) else { return }
+
+        var files: [(url: URL, size: UInt64, date: Date)] = []
+        var totalSize: UInt64 = 0
+
+        for case let fileURL as URL in enumerator {
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+                  let size = (attrs[.size] as? NSNumber)?.uint64Value,
+                  let date = attrs[.modificationDate] as? Date else { continue }
+            files.append((fileURL, size, date))
+            totalSize += size
+        }
+
+        guard totalSize > maxCacheSizeBytes else { return }
+
+        files.sort { $0.date < $1.date }
+        var excess = totalSize - maxCacheSizeBytes
+
+        for file in files {
+            guard excess > 0 else { break }
+            try? FileManager.default.removeItem(at: file.url)
+            excess -= min(excess, file.size)
+        }
+
+        Logger.playback.info("Cache limit enforced: removed \(files.count) files, freed \(totalSize - (totalSize - excess)) bytes")
     }
 
     struct AudioTrack: Identifiable {
@@ -803,7 +929,9 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     }
 
     private func convertAndLoadVideo(_ sourceURL: URL, allowFastRemux: Bool = true, startAt: Double = 0) async {
-        statusMessage = startAt > 0 ? "Saltando a \(formattedTime(startAt))..." : "Inspeccionando archivo..."
+        statusMessage = startAt > 0
+            ? "\(NSLocalizedString("Seeking...", comment: "")) \(formattedTime(startAt))"
+            : NSLocalizedString("Inspecting file...", comment: "")
         if startAt <= 0 {
             hasVideo = false
         }
@@ -824,7 +952,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
 
         guard let ffmpegURL = findFFmpeg() else {
-            statusMessage = "Este formato necesita FFmpeg incluido en Rift o instalado con brew."
+            statusMessage = NSLocalizedString("This format requires FFmpeg", comment: "")
             hasVideo = false
             return
         }
@@ -873,8 +1001,8 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
 
         statusMessage = startAt > 0
-            ? "Saltando a \(formattedTime(startAt))..."
-            : "Preparando \(sourceURL.pathExtension.uppercased())..."
+            ? "\(NSLocalizedString("Seeking...", comment: "")) \(formattedTime(startAt))"
+            : "\(NSLocalizedString("Preparing video", comment: "")) \(sourceURL.pathExtension.uppercased())..."
 
         let candidateCacheURL = allowFastRemux ? Self.cachedCompatibleVideoURL(for: sourceURL) : nil
         let finalCachedOutputURL: URL?
@@ -915,7 +1043,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             ]
             convertedVideoURL = outputURL
             convertedVideoShouldCleanup = true
-            let success = await runFFmpegAsync(ffmpegURL, arguments: ffmpegArgs, phase: "Preparando video")
+            let success = await runFFmpegAsync(ffmpegURL, arguments: ffmpegArgs, phase: NSLocalizedString("Preparing video", comment: ""))
             if success {
                 let playableURL = finalizePreparedVideo(outputURL, cachedOutputURL: finalCachedOutputURL)
                 self.playVideo(playableURL, displayName: sourceURL.lastPathComponent)
@@ -944,7 +1072,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
         convertedVideoURL = outputURL
         convertedVideoShouldCleanup = true
-        let hwSuccess = await runFFmpegAsync(ffmpegURL, arguments: hwArgs, phase: "Convirtiendo video")
+        let hwSuccess = await runFFmpegAsync(ffmpegURL, arguments: hwArgs, phase: NSLocalizedString("Converting video", comment: ""))
         if hwSuccess {
             let playableURL = finalizePreparedVideo(outputURL, cachedOutputURL: finalCachedOutputURL)
             self.playVideo(playableURL, displayName: sourceURL.lastPathComponent)
@@ -971,7 +1099,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         ] + Self.subtitleMapArgs(for: textSubtitleStreams)
         swArgs += compatibleAudioArgs + ["-c:s", "mov_text", "-y", outputURL.path]
 
-        let swSuccess = await runFFmpegAsync(ffmpegURL, arguments: swArgs, phase: "Convirtiendo compatible")
+        let swSuccess = await runFFmpegAsync(ffmpegURL, arguments: swArgs, phase: NSLocalizedString("Converting video", comment: ""))
         if swSuccess {
             let playableURL = finalizePreparedVideo(outputURL, cachedOutputURL: finalCachedOutputURL)
             self.playVideo(playableURL, displayName: sourceURL.lastPathComponent)
@@ -979,7 +1107,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                 self.seek(to: startAt)
             }
         } else {
-            self.statusMessage = "No se pudo convertir este video."
+            self.statusMessage = NSLocalizedString("Could not open video", comment: "")
             self.hasVideo = false
             self.cleanupConvertedVideo()
         }
@@ -997,6 +1125,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             try FileManager.default.moveItem(at: outputURL, to: cachedOutputURL)
             convertedVideoURL = cachedOutputURL
             convertedVideoShouldCleanup = false
+            Self.enforceCacheSizeLimit()
             return cachedOutputURL
         } catch {
             convertedVideoURL = outputURL
@@ -1113,7 +1242,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             "-y", outputURL.path
         ]
 
-        let success = await runFFmpegAsync(ffmpegURL, arguments: args, phase: "Frame⁺ renderizando 60fps")
+        let success = await runFFmpegAsync(ffmpegURL, arguments: args, phase: NSLocalizedString("Preparing video", comment: ""))
         isFramePlusPreparing = false
 
         if success {
@@ -1142,9 +1271,12 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     private func runFFmpegAsync(_ executableURL: URL, arguments: [String], phase: String) async -> Bool {
         let process = Process()
         process.executableURL = executableURL
-        process.arguments = ["-nostdin"] + arguments
+        let progressArgs = arguments + ["-progress", "pipe:1"]
+        process.arguments = ["-nostdin"] + progressArgs
         let errorPipe = Pipe()
         process.standardError = errorPipe
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
         conversionProcess = process
         
         if let outputPath = arguments.last {
@@ -1154,12 +1286,31 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         let startTime = Date()
         
         let progressTask = Task { @MainActor in
+            let handle = outputPipe.fileHandleForReading
+            handle.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard !data.isEmpty,
+                      let output = String(data: data, encoding: .utf8) else { return }
+                for line in output.components(separatedBy: "\n") {
+                    if line.hasPrefix("out_time_us="),
+                       let micros = Int64(line.dropFirst(12).trimmingCharacters(in: .whitespacesAndNewlines)),
+                       micros > 0 {
+                        Task { @MainActor in
+                            let total = max(self.duration, 1)
+                            let elapsed = Double(micros) / 1_000_000
+                            self.conversionProgress = min(elapsed / total, 1.0)
+                        }
+                    }
+                }
+            }
+
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard process.isRunning else { break }
                 let elapsedSeconds = Int(Date().timeIntervalSince(startTime))
                 self.statusMessage = "\(phase)... \(elapsedSeconds)s"
             }
+            handle.readabilityHandler = nil
         }
 
         return await withCheckedContinuation { continuation in
@@ -1174,6 +1325,9 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                         return
                     }
                     self.conversionProcess = nil
+                    if success {
+                        self.conversionProgress = nil
+                    }
                     continuation.resume(returning: success)
                 }
             }
