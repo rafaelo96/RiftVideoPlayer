@@ -436,42 +436,40 @@ struct TimelineTrack: View {
     let onSeekEnd: (Double) -> Void
 
     var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(.white.opacity(0.08))
-                .frame(height: 4)
-                .cornerRadius(2)
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(.white.opacity(0.08))
+                    .frame(height: 4)
+                    .cornerRadius(2)
 
-            Rectangle()
-                .fill(accentColor)
-                .frame(width: trackWidth, height: 4)
-                .cornerRadius(2)
+                Rectangle()
+                    .fill(accentColor)
+                    .frame(width: geo.size.width * min(CGFloat(currentTime / max(duration, 1)), 1), height: 4)
+                    .cornerRadius(2)
 
-            Rectangle()
-                .fill(.clear)
-                .contentShape(Rectangle())
-                .frame(maxWidth: .infinity)
-                .frame(height: 16)
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            let w = max(0, value.translation.width + 340)
-                            onSeek((w / 680) * duration)
-                        }
-                        .onEnded { value in
-                            let w = max(0, value.translation.width + 340)
-                            onSeekEnd((w / 680) * duration)
-                        }
-                )
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 16)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                let w = max(0, min(CGFloat(value.location.x), geo.size.width))
+                                onSeek((Double(w) / Double(geo.size.width)) * duration)
+                            }
+                            .onEnded { value in
+                                let w = max(0, min(CGFloat(value.location.x), geo.size.width))
+                                onSeekEnd((Double(w) / Double(geo.size.width)) * duration)
+                            }
+                    )
+            }
         }
-        .frame(maxWidth: 680)
+        .frame(maxWidth: .infinity)
         .frame(height: 16)
         .accessibilityLabel(NSLocalizedString("Timeline", comment: ""))
         .accessibilityValue("\(Int(currentTime / 60)):\(String(format: "%02d", Int(currentTime.truncatingRemainder(dividingBy: 60)))) de \(Int(duration / 60)):\(String(format: "%02d", Int(duration.truncatingRemainder(dividingBy: 60))))")
-    }
-
-    private var trackWidth: CGFloat {
-        min(CGFloat(currentTime / duration) * 680, 680)
     }
 
     private var accentColor: Color {

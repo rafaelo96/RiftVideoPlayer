@@ -556,8 +556,11 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         view: MTKView
     ) {
         // Pacing GPU: máximo 3 comandos en vuelo
-        guard framePlusInFlightSemaphore.wait(timeout: .now() + 0.008) == .success else { return }
         let sema = framePlusInFlightSemaphore
+        if sema.wait(timeout: .now() + 0.002) != .success {
+            renderBlack(to: drawable, commandBuffer: commandBuffer, ciContext: ciContext, size: view.drawableSize)
+            return
+        }
         commandBuffer.addCompletedHandler { _ in sema.signal() }
 
         // ─── PRIMING: esperar mínimo 2 frames en buffer ───────────
@@ -853,12 +856,29 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         averageLumaSamples = 0
         resetStats()
         resetRIFECache()
+        let oldPoolA = framePlusOutputPoolA
+        let oldPoolB = framePlusOutputPoolB
+        let oldTexA = framePlusOutputTextureA
+        let oldTexB = framePlusOutputTextureB
         framePlusOutputPoolA = nil
         framePlusOutputPoolB = nil
         framePlusOutputTextureA = nil
         framePlusOutputTextureB = nil
         framePlusLastOutputSize = .zero
         framePlusOutputToggle = false
+
+        if oldPoolA != nil || oldPoolB != nil || oldTexA != nil || oldTexB != nil,
+           let device = MTLCreateSystemDefaultDevice(),
+           let commandQueue = device.makeCommandQueue() {
+            let buffer = commandQueue.makeCommandBuffer()
+            buffer?.addCompletedHandler { _ in
+                _ = oldPoolA
+                _ = oldPoolB
+                _ = oldTexA
+                _ = oldTexB
+            }
+            buffer?.commit()
+        }
 
         guard let item else {
             videoOutput = nil
@@ -1288,7 +1308,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
     }
 
     private func detectSceneChangeIfNeeded(_ pixelBuffer: CVPixelBuffer) {
-        guard sourceFrameIndex.isMultiple(of: 6) else { return }
+        guard sourceFrameIndex.isMultiple(of: 30) else { return }
         let image = ciImage(from: pixelBuffer)
         let extent = image.extent
         guard let averageFilter = CIFilter(name: "CIAreaAverage") else { return }

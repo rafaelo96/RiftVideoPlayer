@@ -1,18 +1,22 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import gsap from "gsap";
 
 interface ControlBarProps {
   progress: number;
   isPlaying: boolean;
   onPlayToggle: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
-export default function ControlBar({ progress, isPlaying, onPlayToggle }: ControlBarProps) {
+export default function ControlBar({ progress, isPlaying, onPlayToggle, onPrev, onNext }: ControlBarProps) {
   const ref = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const fpsRef = useRef<HTMLSpanElement>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showControls, setShowControls] = useState(true);
 
   useEffect(() => {
     if (!progressRef.current) return;
@@ -40,6 +44,7 @@ export default function ControlBar({ progress, isPlaying, onPlayToggle }: Contro
   return (
     <div
       ref={ref}
+      inert={!showControls ? true : undefined}
       className="absolute bottom-2 sm:bottom-[10px] left-1/2 -translate-x-1/2 w-[94%] max-w-[660px] z-20"
     >
       <div className="rounded-xl bg-[var(--color-panel)] backdrop-blur-xl border border-[var(--color-rule)] px-[14px] py-[3px]">
@@ -67,13 +72,22 @@ export default function ControlBar({ progress, isPlaying, onPlayToggle }: Contro
             <div className="hidden sm:flex items-center gap-[3px] min-w-0">
               <button
                 type="button"
-                aria-label="Mute preview audio"
+                aria-label={isMuted ? "Unmute preview audio" : "Mute preview audio"}
+                onClick={() => setIsMuted((v) => !v)}
                 className="w-7 h-7 flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)] transition-colors"
               >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                  <path d="M19 7l-5 5 5 5" />
-                </svg>
+                {isMuted ? (
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                    <line x1="23" y1="9" x2="17" y2="15" />
+                    <line x1="17" y1="9" x2="23" y2="15" />
+                  </svg>
+                ) : (
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                    <path d="M19 7l-5 5 5 5" />
+                  </svg>
+                )}
               </button>
               <div className="w-[48px] h-[3px] bg-[var(--color-rule)] rounded-full overflow-hidden">
                 <div className="h-full w-[65%] bg-[var(--color-muted)] rounded-full" />
@@ -96,6 +110,7 @@ export default function ControlBar({ progress, isPlaying, onPlayToggle }: Contro
             <button
               type="button"
               aria-label="Previous chapter"
+              onClick={onPrev}
               className="w-8 h-8 sm:w-7 sm:h-7 rounded-full border border-[var(--color-rule)] flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)] transition-colors"
             >
               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -123,6 +138,7 @@ export default function ControlBar({ progress, isPlaying, onPlayToggle }: Contro
             <button
               type="button"
               aria-label="Next chapter"
+              onClick={onNext}
               className="w-8 h-8 sm:w-7 sm:h-7 rounded-full border border-[var(--color-rule)] flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)] transition-colors"
             >
               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

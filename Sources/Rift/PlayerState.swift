@@ -106,6 +106,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     private var hlsMinimumRevealDuration: TimeInterval = 0
     private var hlsPlaybackOffset: Double = 0
     private var hlsSeekTask: Task<Void, Never>?
+    private var audioTrackTask: Task<Void, Never>?
     private var hlsShouldResumePlayback = false
     private var cachedSourceMetadataURL: URL?
     private var cachedSourceStreams: [StreamInfo] = []
@@ -387,6 +388,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     }
 
     func selectAudioTrack(_ index: Int) {
+        audioTrackTask?.cancel()
         guard index < audioTracks.count else { return }
         if playbackBackend == .directFFmpeg {
             selectedAudioTrackIndex = index
@@ -406,7 +408,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             return
         }
 
-        Task {
+        audioTrackTask = Task {
             guard let allTracks = try? await item.asset.loadTracks(withMediaType: .audio) else { return }
             await MainActor.run {
                 self.applyAudioMix(trackIndex: index, to: item, allTracks: allTracks)
@@ -1344,7 +1346,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
     }
 
-    private func runFFmpegHLS(
+    private nonisolated func runFFmpegHLS(
         _ executableURL: URL,
         arguments: [String],
         playlistURL: URL,
@@ -1359,76 +1361,96 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         process.executableURL = executableURL
         process.arguments = ["-nostdin"] + arguments
         process.standardError = Pipe()
-        conversionProcess = process
 
         do {
             try process.run()
         } catch {
-            conversionProcess = nil
+            await MainActor.run { [weak self] in self?.conversionProcess = nil }
             return false
         }
 
         let startTime = Date()
+        let pollInterval = UInt64(100_000_000)
 
-        while process.isRunning {
-            let elapsedSeconds = Int(Date().timeIntervalSince(startTime))
-            statusMessage = "\(phase)... \(elapsedSeconds)s"
+        return await Task.detached {
+            let fileManager = FileManager.default
 
-            let startupDuration: TimeInterval = playbackOffset > 0 ? 0.75 : 2.5
-            if Self.hlsPlaylistDuration(at: sourcePlaylistURL) >= startupDuration,
-               Self.writeMirroredHLSPlaylist(
+            while process.isRunning {
+                let elapsedSeconds = Int(Date().timeIntervalSince(startTime))
+
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.statusMessage = "\(phase)... \(elapsedSeconds)s"
+                }
+
+                let startupDuration: TimeInterval = playbackOffset > 0 ? 0.75 : 2.5
+                if await Self.hlsPlaylistDuration(at: sourcePlaylistURL) >= startupDuration,
+                   Self.writeMirroredHLSPlaylist(
+                    from: sourcePlaylistURL,
+                    to: playbackPlaylistURL,
+                    maxSegments: nil,
+                    revealDuration: max(12, startupDuration)
+                ) {
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        self.hlsSourcePlaylistURL = sourcePlaylistURL
+                        self.hlsPlaybackPlaylistURL = playbackPlaylistURL
+                        self.hlsMinimumRevealDuration = 0
+                        self.hlsPlaybackOffset = max(0, playbackOffset)
+                        self.statusMessage = nil
+                        self.playVideo(playlistURL, displayName: displayName)
+                        self.startHLSPlaylistMirror(
+                            sourcePlaylistURL: sourcePlaylistURL,
+                            playbackPlaylistURL: playbackPlaylistURL
+                        )
+                        self.observeProgressiveFFmpegCompletion(process, playbackURL: playlistURL)
+                    }
+                    return true
+                }
+
+                if elapsedSeconds >= 12 {
+                    process.terminate()
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        self.conversionProcess = nil
+                        self.hlsServer?.stop()
+                        self.hlsServer = nil
+                    }
+                    try? fileManager.removeItem(at: hlsDirectory)
+                    return false
+                }
+
+                try? await Task.sleep(nanoseconds: pollInterval)
+            }
+
+            let success = process.terminationStatus == 0
+            await MainActor.run { [weak self] in self?.conversionProcess = nil }
+            let mirroredPlaylist = Self.writeMirroredHLSPlaylist(
                 from: sourcePlaylistURL,
                 to: playbackPlaylistURL,
                 maxSegments: nil,
-                revealDuration: max(12, startupDuration)
-            ) {
-                hlsSourcePlaylistURL = sourcePlaylistURL
-                hlsPlaybackPlaylistURL = playbackPlaylistURL
-                hlsMinimumRevealDuration = 0
-                hlsPlaybackOffset = max(0, playbackOffset)
-                statusMessage = nil
-                playVideo(playlistURL, displayName: displayName)
-                startHLSPlaylistMirror(
-                    sourcePlaylistURL: sourcePlaylistURL,
-                    playbackPlaylistURL: playbackPlaylistURL
-                )
-                observeProgressiveFFmpegCompletion(process, playbackURL: playlistURL)
-                return true
-            }
-
-            if elapsedSeconds >= 12 {
-                process.terminate()
-                conversionProcess = nil
-                hlsServer?.stop()
-                hlsServer = nil
-                try? FileManager.default.removeItem(at: hlsDirectory)
+                revealDuration: nil
+            )
+            guard success, mirroredPlaylist, await Self.hlsPlaylistLooksPlayable(playlistURL) else {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.hlsServer?.stop()
+                    self.hlsServer = nil
+                }
+                try? fileManager.removeItem(at: hlsDirectory)
                 return false
             }
 
-            try? await Task.sleep(nanoseconds: 25_000_000)
-        }
-
-        let success = process.terminationStatus == 0
-        conversionProcess = nil
-        let mirroredPlaylist = Self.writeMirroredHLSPlaylist(
-            from: sourcePlaylistURL,
-            to: playbackPlaylistURL,
-            maxSegments: nil,
-            revealDuration: nil
-        )
-        guard success, mirroredPlaylist, await Self.hlsPlaylistLooksPlayable(playlistURL) else {
-            hlsServer?.stop()
-            hlsServer = nil
-            try? FileManager.default.removeItem(at: hlsDirectory)
-            return false
-        }
-
-        hlsSourcePlaylistURL = sourcePlaylistURL
-        hlsPlaybackPlaylistURL = playbackPlaylistURL
-        hlsMinimumRevealDuration = 0
-        hlsPlaybackOffset = max(0, playbackOffset)
-        playVideo(playlistURL, displayName: displayName)
-        return true
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.hlsSourcePlaylistURL = sourcePlaylistURL
+                self.hlsPlaybackPlaylistURL = playbackPlaylistURL
+                self.hlsMinimumRevealDuration = 0
+                self.hlsPlaybackOffset = max(0, playbackOffset)
+                self.playVideo(playlistURL, displayName: displayName)
+            }
+            return true
+        }.value
     }
 
     private func observeProgressiveFFmpegCompletion(_ process: Process, playbackURL: URL) {
@@ -1454,34 +1476,41 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         hlsPlaybackPlaylistURL = playbackPlaylistURL
         hlsMinimumRevealDuration = 0
 
-        hlsPlaylistUpdateTask = Task { @MainActor in
+        let source = sourcePlaylistURL
+        let playback = playbackPlaylistURL
+
+        hlsPlaylistUpdateTask = Task {
             let startedAt = Date()
 
             while !Task.isCancelled {
                 let elapsed = Date().timeIntervalSince(startedAt)
                 let automaticRevealDuration = max(12, elapsed + 45)
-                let revealDuration = max(automaticRevealDuration, self.hlsMinimumRevealDuration)
+
+                let revealDuration: TimeInterval = await MainActor.run { [weak self] in
+                    guard let self else { return automaticRevealDuration }
+                    return max(automaticRevealDuration, self.hlsMinimumRevealDuration)
+                }
 
                 let isComplete = Self.writeMirroredHLSPlaylist(
-                    from: sourcePlaylistURL,
-                    to: playbackPlaylistURL,
+                    from: source,
+                    to: playback,
                     maxSegments: nil,
                     revealDuration: revealDuration
                 )
 
                 if isComplete,
-                   let playlist = try? String(contentsOf: sourcePlaylistURL, encoding: .utf8),
+                   let playlist = try? String(contentsOf: source, encoding: .utf8),
                    playlist.contains("#EXT-X-ENDLIST") {
                     _ = Self.writeMirroredHLSPlaylist(
-                        from: sourcePlaylistURL,
-                        to: playbackPlaylistURL,
+                        from: source,
+                        to: playback,
                         maxSegments: nil,
                         revealDuration: nil
                     )
                     break
                 }
 
-                try? await Task.sleep(nanoseconds: 250_000_000)
+                try? await Task.sleep(nanoseconds: 500_000_000)
             }
         }
     }
@@ -2000,11 +2029,32 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     }
 
     private func findFFmpeg() -> URL? {
-        findExecutable(named: "ffmpeg", fallbackPaths: [
+        if let path = try? Self.shell("which ffmpeg"), !path.isEmpty {
+            let url = URL(fileURLWithPath: path.trimmingCharacters(in: .whitespacesAndNewlines))
+            if FileManager.default.isExecutableFile(atPath: url.path) {
+                return url
+            }
+        }
+        return findExecutable(named: "ffmpeg", fallbackPaths: [
             "/opt/homebrew/bin/ffmpeg",
             "/usr/local/bin/ffmpeg",
-            "/usr/bin/ffmpeg"
+            "/usr/bin/ffmpeg",
+            "/opt/local/bin/ffmpeg",
+            "\(NSHomeDirectory())/.local/bin/ffmpeg",
+            "\(NSHomeDirectory())/.nix-profile/bin/ffmpeg",
         ])
+    }
+
+    private static func shell(_ command: String) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-c", command]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        try process.run()
+        process.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8) ?? ""
     }
 
     private static func parseFrameRate(_ rawValue: String) -> Double? {
