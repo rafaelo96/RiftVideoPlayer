@@ -116,7 +116,7 @@ final class FramePrefetcher: @unchecked Sendable {
         buffer.reset()
 
         let t = DispatchSource.makeTimerSource(queue: decodeQueue)
-        t.schedule(deadline: .now(), repeating: .milliseconds(4), leeway: .milliseconds(1))
+        t.schedule(deadline: .now(), repeating: .milliseconds(16), leeway: .milliseconds(2))
         t.setEventHandler { [weak self] in
             self?.prefetchOne()
         }

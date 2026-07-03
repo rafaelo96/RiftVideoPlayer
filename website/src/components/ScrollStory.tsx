@@ -102,6 +102,10 @@ function lerpState(progress: number): StoryState {
 export default function ScrollStory() {
   const sectionRef = useRef<HTMLElement>(null);
   const [state, setState] = useState<StoryState>(STEPS[0]);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const scrollProgressRef = useRef(0);
+  const timerProgressRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -115,12 +119,39 @@ export default function ScrollStory() {
       anticipatePin: 1,
       invalidateOnRefresh: true,
       onUpdate: (self) => {
-        setState(lerpState(self.progress));
+        scrollProgressRef.current = self.progress;
       },
     });
 
     return () => st.kill();
   }, []);
+
+  // Advance timer progress when playing
+  useEffect(() => {
+    const DURATION = 296;
+    let lastTime = performance.now();
+
+    function tick(now: number) {
+      if (isPlaying) {
+        const dt = (now - lastTime) / 1000;
+        timerProgressRef.current = Math.min(1, timerProgressRef.current + dt / DURATION);
+      }
+      lastTime = now;
+
+      const effective = Math.max(scrollProgressRef.current, timerProgressRef.current);
+      const next = lerpState(effective);
+      setState((prev) =>
+        prev.progress !== next.progress || prev.scene !== next.scene ? next : prev
+      );
+
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [isPlaying]);
 
   const heroHidden = state.scene > 1 || state.progress > 0.25;
   const activeStory = Math.max(0, Math.min(STORY_LABELS.length - 1, state.scene - 1));
@@ -160,7 +191,7 @@ export default function ScrollStory() {
           </div>
 
           <div className="min-w-0">
-            <StickyPlayer state={state} />
+            <StickyPlayer state={state} isPlaying={isPlaying} onPlayToggle={() => setIsPlaying((v) => !v)} />
             <div className="story-side" aria-hidden="true">
               {STORY_LABELS.map((label, index) => (
                 <div

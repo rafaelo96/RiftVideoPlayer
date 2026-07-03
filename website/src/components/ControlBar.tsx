@@ -5,9 +5,11 @@ import gsap from "gsap";
 
 interface ControlBarProps {
   progress: number;
+  isPlaying: boolean;
+  onPlayToggle: () => void;
 }
 
-export default function ControlBar({ progress }: ControlBarProps) {
+export default function ControlBar({ progress, isPlaying, onPlayToggle }: ControlBarProps) {
   const ref = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const fpsRef = useRef<HTMLSpanElement>(null);
@@ -103,12 +105,20 @@ export default function ControlBar({ progress }: ControlBarProps) {
             </button>
             <button
               type="button"
-              aria-label="Play preview"
+              aria-label={isPlaying ? "Pause preview" : "Play preview"}
+              onClick={onPlayToggle}
               className="w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-[var(--color-accent)] text-[var(--color-accent-ink)] flex items-center justify-center hover:-translate-y-px active:translate-y-0 transition-transform"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <polygon points="8 5 19 12 8 19 8 5" />
-              </svg>
+              {isPlaying ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <rect x="6" y="4" width="4" height="16" />
+                  <rect x="14" y="4" width="4" height="16" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <polygon points="8 5 19 12 8 19 8 5" />
+                </svg>
+              )}
             </button>
             <button
               type="button"
