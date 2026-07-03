@@ -1,0 +1,322 @@
+{
+  ".opencode/opencode.json": {
+    "mtime": 1783097022.87048,
+    "ast_hash": "abcc8b9dcd80bca5f9dde6d9f0c3ae79",
+    "semantic_hash": "abcc8b9dcd80bca5f9dde6d9f0c3ae79"
+  },
+  ".opencode/plugins/graphify.js": {
+    "mtime": 1783097022.87041,
+    "ast_hash": "d12d57c380c6f01a0a3c3d480824d09f",
+    "semantic_hash": "d12d57c380c6f01a0a3c3d480824d09f"
+  },
+  ".vscode/launch.json": {
+    "mtime": 1780554188.597551,
+    "ast_hash": "a34b87b262f915a4a50d67d4ecbfdab0",
+    "semantic_hash": "a34b87b262f915a4a50d67d4ecbfdab0"
+  },
+  "Package.swift": {
+    "mtime": 1780872468.2441657,
+    "ast_hash": "d8f5c3334d1201d02de84272fc78a468",
+    "semantic_hash": "d8f5c3334d1201d02de84272fc78a468"
+  },
+  "Sources/Rift/ContentView.swift": {
+    "mtime": 1782092434.4733963,
+    "ast_hash": "1f905a91d5cd829c2a98fe0464e60786",
+    "semantic_hash": "1f905a91d5cd829c2a98fe0464e60786"
+  },
+  "Sources/Rift/DirectFFmpegPlayerView.swift": {
+    "mtime": 1780867857.5945988,
+    "ast_hash": "79e97bf95cae66f19091add010dabe86",
+    "semantic_hash": "79e97bf95cae66f19091add010dabe86"
+  },
+  "Sources/Rift/FramePipeline.swift": {
+    "mtime": 1783096224.2407277,
+    "ast_hash": "276342a232f31ffc3d5c9d159b723e42",
+    "semantic_hash": "276342a232f31ffc3d5c9d159b723e42"
+  },
+  "Sources/Rift/FramePlusMEMC.metal": {
+    "mtime": 1781018199.1072752,
+    "ast_hash": "97bb9b655754750ff8f6bc1794504f09",
+    "semantic_hash": "97bb9b655754750ff8f6bc1794504f09"
+  },
+  "Sources/Rift/FramePlusMEMCEngine.swift": {
+    "mtime": 1780849465.5599692,
+    "ast_hash": "83102ea04c57ea20e24e5bc233cabccf",
+    "semantic_hash": "83102ea04c57ea20e24e5bc233cabccf"
+  },
+  "Sources/Rift/LiquidGlassButton.swift": {
+    "mtime": 1781631446.968051,
+    "ast_hash": "2cf5e3178f925506119ee0a2ddfca34c",
+    "semantic_hash": "2cf5e3178f925506119ee0a2ddfca34c"
+  },
+  "Sources/Rift/LiquidGlassPanel.swift": {
+    "mtime": 1781662069.6263506,
+    "ast_hash": "297c5317ae8f6cde22f57df5b48ea023",
+    "semantic_hash": "297c5317ae8f6cde22f57df5b48ea023"
+  },
+  "Sources/Rift/LocalHLSHTTPServer.swift": {
+    "mtime": 1780873262.7184348,
+    "ast_hash": "463764c20d488452ce593b52f3824a94",
+    "semantic_hash": "463764c20d488452ce593b52f3824a94"
+  },
+  "Sources/Rift/Logger.swift": {
+    "mtime": 1782023858.5076551,
+    "ast_hash": "6a6781b02ccaa812664e76d56160de5b",
+    "semantic_hash": "6a6781b02ccaa812664e76d56160de5b"
+  },
+  "Sources/Rift/NativeVideoPlayerView.swift": {
+    "mtime": 1780553326.431579,
+    "ast_hash": "f3cf8b52e516e38e4be9c0f10f1b3f2f",
+    "semantic_hash": "f3cf8b52e516e38e4be9c0f10f1b3f2f"
+  },
+  "Sources/Rift/NativeVisualEffectView.swift": {
+    "mtime": 1781633421.4931362,
+    "ast_hash": "1631a86e4de7bcd619811b45f4f19ff5",
+    "semantic_hash": "1631a86e4de7bcd619811b45f4f19ff5"
+  },
+  "Sources/Rift/OpticalFlowEngine.swift": {
+    "mtime": 1780775198.4912167,
+    "ast_hash": "f29d7cda36a17e8e07eb85d9a108b34d",
+    "semantic_hash": "f29d7cda36a17e8e07eb85d9a108b34d"
+  },
+  "Sources/Rift/PlaceboRenderer.swift": {
+    "mtime": 1779346645.71657,
+    "ast_hash": "9ade700797d305a9cbf0b2a75a04055a",
+    "semantic_hash": "9ade700797d305a9cbf0b2a75a04055a"
+  },
+  "Sources/Rift/PlayerControlsView.swift": {
+    "mtime": 1782092579.3546805,
+    "ast_hash": "8fdbdf406888f2ead9fab411db40f228",
+    "semantic_hash": "8fdbdf406888f2ead9fab411db40f228"
+  },
+  "Sources/Rift/PlayerState.swift": {
+    "mtime": 1782092649.1963367,
+    "ast_hash": "54148191cc1b38712d21abdfe998790f",
+    "semantic_hash": "54148191cc1b38712d21abdfe998790f"
+  },
+  "Sources/Rift/RIFECoreMLInterpolator.swift": {
+    "mtime": 1780849474.508328,
+    "ast_hash": "3e0fe08801c60857b23ff81db4ec760a",
+    "semantic_hash": "3e0fe08801c60857b23ff81db4ec760a"
+  },
+  "Sources/Rift/RIFEEngine.swift": {
+    "mtime": 1779516330.6074426,
+    "ast_hash": "2891c2cc729726345cb535ab4788d328",
+    "semantic_hash": "2891c2cc729726345cb535ab4788d328"
+  },
+  "Sources/Rift/ResourceLocator.swift": {
+    "mtime": 1780849456.2664013,
+    "ast_hash": "10874eaa1c5fa3652433fe73916874b7",
+    "semantic_hash": "10874eaa1c5fa3652433fe73916874b7"
+  },
+  "Sources/Rift/Resources/RIFE.mlpackage/Manifest.json": {
+    "mtime": 1779377398.145351,
+    "ast_hash": "c16f0844abf4be84493bcb2599da61ff",
+    "semantic_hash": "c16f0844abf4be84493bcb2599da61ff"
+  },
+  "Sources/Rift/RiftApp.swift": {
+    "mtime": 1780774903.1001358,
+    "ast_hash": "da44e164a1dc0d0966c7f139cf0b036e",
+    "semantic_hash": "da44e164a1dc0d0966c7f139cf0b036e"
+  },
+  "Sources/Rift/RiftPlayerView.swift": {
+    "mtime": 1782023854.499773,
+    "ast_hash": "d98888e226dafd8c0a3c1ead33c2171f",
+    "semantic_hash": "d98888e226dafd8c0a3c1ead33c2171f"
+  },
+  "Sources/Rift/VideoDecoderEngine.swift": {
+    "mtime": 1779347265.080798,
+    "ast_hash": "59f6163c4fb2961bafc2e347cc95062b",
+    "semantic_hash": "59f6163c4fb2961bafc2e347cc95062b"
+  },
+  "Sources/Rift/VideoInterpolationPipeline.swift": {
+    "mtime": 1779469181.0613172,
+    "ast_hash": "80b64a2b8a0c6e65241ec3debadd12e4",
+    "semantic_hash": "80b64a2b8a0c6e65241ec3debadd12e4"
+  },
+  "Tests/RiftTests/RIFEEngineBenchmarks.swift": {
+    "mtime": 1779516330.6927867,
+    "ast_hash": "f301abc78584ff067da26719e520f887",
+    "semantic_hash": "f301abc78584ff067da26719e520f887"
+  },
+  "Tests/RiftTests/RiftTests.swift": {
+    "mtime": 1782092701.814811,
+    "ast_hash": "15ee17f387d4056029a6269aa1463bf8",
+    "semantic_hash": "15ee17f387d4056029a6269aa1463bf8"
+  },
+  "external/rife-4.25-lite/train_log/IFNet_HDv3.py": {
+    "mtime": 1729291440.0,
+    "ast_hash": "1b849e070e4cb8c86a3ed89d06e5c24a",
+    "semantic_hash": "1b849e070e4cb8c86a3ed89d06e5c24a"
+  },
+  "external/rife-4.25-lite/train_log/RIFE_HDv3.py": {
+    "mtime": 1729291532.0,
+    "ast_hash": "9fd5a91e11cab240c45dda1fbe818ff2",
+    "semantic_hash": "9fd5a91e11cab240c45dda1fbe818ff2"
+  },
+  "external/rife-4.25-lite/train_log/refine.py": {
+    "mtime": 1660196250.0,
+    "ast_hash": "81cb9f0283882fd9a5abc21442c7e8a0",
+    "semantic_hash": "81cb9f0283882fd9a5abc21442c7e8a0"
+  },
+  "scripts/build-release.sh": {
+    "mtime": 1782092622.9978535,
+    "ast_hash": "c1f7b47a9e32fb835cc8195c78b6d109",
+    "semantic_hash": "c1f7b47a9e32fb835cc8195c78b6d109"
+  },
+  "scripts/convert_rife_v4_coreml.py": {
+    "mtime": 1779516330.6500568,
+    "ast_hash": "11763beccdf38d836e27474e54116275",
+    "semantic_hash": "11763beccdf38d836e27474e54116275"
+  },
+  "scripts/make_dmg_background.swift": {
+    "mtime": 1781023354.747711,
+    "ast_hash": "f6a5125ffdf4a01cc2c163792a1e693b",
+    "semantic_hash": "f6a5125ffdf4a01cc2c163792a1e693b"
+  },
+  "scripts/setup-sentry.sh": {
+    "mtime": 1782092625.9520767,
+    "ast_hash": "d8e4ab61a7a625febfe9468243d2b2a5",
+    "semantic_hash": "d8e4ab61a7a625febfe9468243d2b2a5"
+  },
+  "scripts/setup-sparkle.sh": {
+    "mtime": 1782092630.1048613,
+    "ast_hash": "9a76f7e4c754cdde7f33fc6899102f03",
+    "semantic_hash": "9a76f7e4c754cdde7f33fc6899102f03"
+  },
+  "skills-lock.json": {
+    "mtime": 1779635592.6480765,
+    "ast_hash": "4662917bddd135a1d99463779cf74c28",
+    "semantic_hash": "4662917bddd135a1d99463779cf74c28"
+  },
+  "website/eslint.config.mjs": {
+    "mtime": 1782227507.756334,
+    "ast_hash": "dfa1f5f6a7037bf39dc510f30b180002",
+    "semantic_hash": "dfa1f5f6a7037bf39dc510f30b180002"
+  },
+  "website/next-env.d.ts": {
+    "mtime": 1782925441.5927,
+    "ast_hash": "2a74d3909800ca5467fa83b0ab4a4890",
+    "semantic_hash": "2a74d3909800ca5467fa83b0ab4a4890"
+  },
+  "website/next.config.ts": {
+    "mtime": 1782227507.7564902,
+    "ast_hash": "9b77af189a21a7a64e4bd7a426f64176",
+    "semantic_hash": "9b77af189a21a7a64e4bd7a426f64176"
+  },
+  "website/package.json": {
+    "mtime": 1782227547.2212338,
+    "ast_hash": "3bb72583c6ff63dc6f1d5ed2522d8f28",
+    "semantic_hash": "3bb72583c6ff63dc6f1d5ed2522d8f28"
+  },
+  "website/postcss.config.mjs": {
+    "mtime": 1782227507.7565248,
+    "ast_hash": "239f3ebf717465dc636818a1a619398d",
+    "semantic_hash": "239f3ebf717465dc636818a1a619398d"
+  },
+  "website/src/app/layout.tsx": {
+    "mtime": 1782232389.7165976,
+    "ast_hash": "c2707d57997602dde39bd378030cd3e4",
+    "semantic_hash": "c2707d57997602dde39bd378030cd3e4"
+  },
+  "website/src/app/page.tsx": {
+    "mtime": 1782666192.9340048,
+    "ast_hash": "60ccbf52be413b4823f1fb716ab0795b",
+    "semantic_hash": "60ccbf52be413b4823f1fb716ab0795b"
+  },
+  "website/src/components/ClientLayout.tsx": {
+    "mtime": 1782233792.8799102,
+    "ast_hash": "782fd157cc46d8e1e624b8133d607601",
+    "semantic_hash": "782fd157cc46d8e1e624b8133d607601"
+  },
+  "website/src/components/ControlBar.tsx": {
+    "mtime": 1783096262.7829742,
+    "ast_hash": "d813585a795eb645f25f1ce17060e98f",
+    "semantic_hash": "d813585a795eb645f25f1ce17060e98f"
+  },
+  "website/src/components/Navbar.tsx": {
+    "mtime": 1782666466.1659431,
+    "ast_hash": "4e751307d3beb810f1b8bd1c2008cb03",
+    "semantic_hash": "4e751307d3beb810f1b8bd1c2008cb03"
+  },
+  "website/src/components/ScrollStory.tsx": {
+    "mtime": 1783096290.3844235,
+    "ast_hash": "a0e96882d854634f0e39da011b6c1a26",
+    "semantic_hash": "a0e96882d854634f0e39da011b6c1a26"
+  },
+  "website/src/components/StickyPlayer.tsx": {
+    "mtime": 1783096271.209693,
+    "ast_hash": "16e47fd53073c4b6cfd3a9273df4c712",
+    "semantic_hash": "16e47fd53073c4b6cfd3a9273df4c712"
+  },
+  "website/src/components/scenes/AudioScene.tsx": {
+    "mtime": 1782925676.1692748,
+    "ast_hash": "ef20cf5e7f08017a4424f209f264f57d",
+    "semantic_hash": "ef20cf5e7f08017a4424f209f264f57d"
+  },
+  "website/src/components/scenes/CinematicScene.tsx": {
+    "mtime": 1782232911.4526,
+    "ast_hash": "38d544cec82b86743c6112bfa7c8fe23",
+    "semantic_hash": "38d544cec82b86743c6112bfa7c8fe23"
+  },
+  "website/src/components/scenes/HDRScene.tsx": {
+    "mtime": 1782229612.838721,
+    "ast_hash": "311ae77fe08431912058f6e519095b96",
+    "semantic_hash": "311ae77fe08431912058f6e519095b96"
+  },
+  "website/src/components/scenes/LogoScene.tsx": {
+    "mtime": 1782229625.6303227,
+    "ast_hash": "ef5910959e4873d5dd1d02e929bebec4",
+    "semantic_hash": "ef5910959e4873d5dd1d02e929bebec4"
+  },
+  "website/src/components/scenes/MacOSScene.tsx": {
+    "mtime": 1782232930.5092404,
+    "ast_hash": "7317cd765d85ddca6a5571fcc8bd4315",
+    "semantic_hash": "7317cd765d85ddca6a5571fcc8bd4315"
+  },
+  "website/src/components/sections/Download.tsx": {
+    "mtime": 1782666227.839797,
+    "ast_hash": "772ff5aeab3b5ee111160ba57a71c45e",
+    "semantic_hash": "772ff5aeab3b5ee111160ba57a71c45e"
+  },
+  "website/src/components/sections/Features.tsx": {
+    "mtime": 1782666215.064181,
+    "ast_hash": "089c7e71f81f0b0f5505b19073dd9c51",
+    "semantic_hash": "089c7e71f81f0b0f5505b19073dd9c51"
+  },
+  "website/src/components/sections/Technology.tsx": {
+    "mtime": 1782666221.567887,
+    "ast_hash": "6d42ea4edcc15b70bc1bdf10e9bf5332",
+    "semantic_hash": "6d42ea4edcc15b70bc1bdf10e9bf5332"
+  },
+  "website/tsconfig.json": {
+    "mtime": 1782227507.7572346,
+    "ast_hash": "ee17fd1c97c735e9f3564e3f5251f125",
+    "semantic_hash": "ee17fd1c97c735e9f3564e3f5251f125"
+  },
+  "test-clips/rift-low-fps-12fps.mp4": {
+    "mtime": 1780591786.4607997,
+    "ast_hash": "7439802be6532162f0944786ac9a9071",
+    "semantic_hash": "7439802be6532162f0944786ac9a9071"
+  },
+  "test-clips/rift-motion2-stress-60fps-reference.mp4": {
+    "mtime": 1780774481.1370635,
+    "ast_hash": "782f4cf5ce7118cb324257409a070d50",
+    "semantic_hash": "782f4cf5ce7118cb324257409a070d50"
+  },
+  "test-clips/rift-motion2-stress-6fps.mp4": {
+    "mtime": 1780774479.8637547,
+    "ast_hash": "7785435bc15c66e578908048af07be45",
+    "semantic_hash": "7785435bc15c66e578908048af07be45"
+  },
+  "test-clips/rift-moving-blocks-60fps-reference.mp4": {
+    "mtime": 1780772612.0266495,
+    "ast_hash": "5b359aa5f54f5045326ffc04a9742d86",
+    "semantic_hash": "5b359aa5f54f5045326ffc04a9742d86"
+  },
+  "test-clips/rift-moving-blocks-6fps.mp4": {
+    "mtime": 1780772611.4279575,
+    "ast_hash": "9ccc95225c652f14a0c89a4d734f5775",
+    "semantic_hash": "9ccc95225c652f14a0c89a4d734f5775"
+  }
+}
