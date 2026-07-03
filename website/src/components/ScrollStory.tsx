@@ -13,7 +13,7 @@ const STEPS = [
     showControls: true,
     showHDR: false,
     progress: 0.04,
-    scale: 1.16,
+    scale: 1.6,
   },
   {
     text: "The player recedes into place.",
@@ -23,7 +23,7 @@ const STEPS = [
     showControls: true,
     showHDR: true,
     progress: 0.16,
-    scale: 1.02,
+    scale: 1.0,
   },
   {
     text: "HDR highlights stay alive.",
@@ -161,28 +161,20 @@ export default function ScrollStory() {
 
           <div className="min-w-0">
             <StickyPlayer state={state} />
-          </div>
-        </div>
-
-        <div className="story-side" aria-hidden="true">
-          {STORY_LABELS.map((label, index) => (
-            <div
-              key={label}
-              className={`story-chip ${activeStory === index ? "is-active" : ""}`}
-            >
-              {label}
+            <div className="story-side" aria-hidden="true">
+              {STORY_LABELS.map((label, index) => (
+                <div
+                  key={label}
+                  className={`story-chip ${activeStory === index ? "is-active" : ""}`}
+                >
+                  {label}
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </div>
 
-      <div className="story-mobile-list" aria-label="Rift highlights">
-        {STORY_LABELS.map((label, index) => (
-          <div key={label} className={`story-chip ${index === 0 ? "is-active" : ""}`}>
-            {label}
-          </div>
-        ))}
-      </div>
     </section>
   );
 }
