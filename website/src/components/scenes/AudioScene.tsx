@@ -1,14 +1,18 @@
 "use client";
 
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
 const spectrumLines = Array.from({ length: 48 }, (_, i) => {
   const angle = (i / 48) * 360;
   const rad = (angle * Math.PI) / 180;
   const innerR = 120;
   const outerR = 140 + (i % 7) * 8;
-  const x1 = 500 + Math.cos(rad) * innerR;
-  const y1 = 500 + Math.sin(rad) * innerR;
-  const x2 = 500 + Math.cos(rad) * outerR;
-  const y2 = 500 + Math.sin(rad) * outerR;
+  const x1 = round2(500 + Math.cos(rad) * innerR);
+  const y1 = round2(500 + Math.sin(rad) * innerR);
+  const x2 = round2(500 + Math.cos(rad) * outerR);
+  const y2 = round2(500 + Math.sin(rad) * outerR);
   const lift = 20 + (i % 6) * 5;
   const sway = -10 + (i % 5) * 5;
 
@@ -17,10 +21,10 @@ const spectrumLines = Array.from({ length: 48 }, (_, i) => {
     y1,
     x2,
     y2,
-    x2Active: x2 + sway,
-    y2Active: y2 - lift,
-    duration: 1.5 + (i % 4) * 0.18,
-    delay: i * 0.05,
+    x2Active: round2(x2 + sway),
+    y2Active: round2(y2 - lift),
+    duration: round2(1.5 + (i % 4) * 0.18),
+    delay: round2(i * 0.05),
   };
 });
 

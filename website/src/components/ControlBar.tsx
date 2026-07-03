@@ -40,7 +40,7 @@ export default function ControlBar({ progress }: ControlBarProps) {
       ref={ref}
       className="absolute bottom-2 sm:bottom-[10px] left-1/2 -translate-x-1/2 w-[94%] max-w-[660px] z-20"
     >
-      <div className="rounded-xl bg-[var(--color-panel)] backdrop-blur-xl border border-[var(--color-rule)] px-3 sm:px-[14px] pt-[6px] pb-[9px] sm:pb-[10px]">
+      <div className="rounded-xl bg-[var(--color-panel)] backdrop-blur-xl border border-[var(--color-rule)] px-[14px] py-[3px]">
         {/* Timeline */}
         <div className="flex items-center gap-[6px] mb-[6px]">
           <span className="text-[9px] font-semibold text-[var(--color-ink-soft)] min-w-[34px] tabular-nums">

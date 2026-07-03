@@ -25,20 +25,8 @@ interface StickyPlayerProps {
 }
 
 export default function StickyPlayer({ state }: StickyPlayerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const containerInnerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
-
-  // Animate container scale
-  useEffect(() => {
-    if (!containerInnerRef.current) return;
-    gsap.to(containerInnerRef.current, {
-      scale: state.scale,
-      duration: 0.8,
-      ease: "power3.out",
-      overwrite: "auto",
-    });
-  }, [state.scale]);
+  const zoomRef = useRef<HTMLDivElement>(null);
 
   // Animate main text
   useEffect(() => {
@@ -59,47 +47,44 @@ export default function StickyPlayer({ state }: StickyPlayerProps) {
 
   return (
     <div className="w-full flex justify-center px-0 sm:px-4">
-      <div
-        ref={containerRef}
-        className="relative w-full max-w-[980px]"
-        style={{ transformOrigin: "center center" }}
-      >
-        <div
-          ref={containerInnerRef}
-          className="relative rounded-[1.15rem] overflow-hidden premium-shadow"
-          style={{ transformOrigin: "center center" }}
-        >
-          {/* macOS window bar */}
-          <div className="relative z-10 flex items-center gap-2 px-3 sm:px-4 py-[10px] bg-[var(--color-panel-solid)] border-b border-[var(--color-rule)]">
-            <div className="flex items-center gap-[5px]">
-              <div className="w-[10px] h-[10px] rounded-full bg-[#FF5F57]" />
-              <div className="w-[10px] h-[10px] rounded-full bg-[#FEBC2E]" />
-              <div className="w-[10px] h-[10px] rounded-full bg-[#28C840]" />
-            </div>
-            <div className="flex-1 text-center">
-              <span className="text-[10px] font-medium text-[var(--color-muted)] tracking-wide">
-                Rift — 4K HDR Demo.mov
-              </span>
-            </div>
-            <div
-              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[8px] font-bold tracking-wider transition-colors duration-500 ${
-                state.showHDR
-                  ? "bg-[var(--color-warm-soft)] text-[var(--color-warm)] border border-[var(--color-rule-strong)]"
-                  : "bg-transparent text-[var(--color-dim)] border border-transparent"
-              }`}
-            >
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-              <span>HDR</span>
-            </div>
-            {state.showHDR && (
-              <span className="text-[8px] font-bold text-[var(--color-muted)] tracking-wider">4K</span>
-            )}
+      <div className="relative w-full max-w-[980px] rounded-[1.15rem] overflow-hidden premium-shadow">
+        {/* macOS window bar — never scaled */}
+        <div className="relative z-10 flex items-center gap-2 px-3 sm:px-4 py-[10px] bg-[var(--color-panel-solid)] border-b border-[var(--color-rule)]">
+          <div className="flex items-center gap-[5px]">
+            <div className="w-[10px] h-[10px] rounded-full bg-[#FF5F57]" />
+            <div className="w-[10px] h-[10px] rounded-full bg-[#FEBC2E]" />
+            <div className="w-[10px] h-[10px] rounded-full bg-[#28C840]" />
           </div>
+          <div className="flex-1 text-center">
+            <span className="text-[10px] font-medium text-[var(--color-muted)] tracking-wide">
+              Rift — 4K HDR Demo.mov
+            </span>
+          </div>
+          <div
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[8px] font-bold tracking-wider transition-colors duration-500 ${
+              state.showHDR
+                ? "bg-[var(--color-warm-soft)] text-[var(--color-warm)] border border-[var(--color-rule-strong)]"
+                : "bg-transparent text-[var(--color-dim)] border border-transparent"
+            }`}
+          >
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            <span>HDR</span>
+          </div>
+          {state.showHDR && (
+            <span className="text-[8px] font-bold text-[var(--color-muted)] tracking-wider">4K</span>
+          )}
+        </div>
 
-          {/* Screen area - 16:9 */}
-          <div className="relative w-full aspect-video overflow-hidden bg-[oklch(8%_0.02_252)]">
+        {/* Screen area — fixed aspect, clips zoom */}
+        <div className="relative w-full aspect-video overflow-hidden bg-[oklch(8%_0.02_252)]">
+          {/* Zoom layer — only video scenes scale */}
+          <div
+            ref={zoomRef}
+            className="absolute inset-0"
+            style={{ transform: `scale(${state.scale})`, transformOrigin: "center center" }}
+          >
             <CinematicScene isActive={state.scene === 0 || state.scene === 1} />
             <HDRScene isActive={state.scene === 2} />
             <AudioScene isActive={state.scene === 3} />
@@ -113,40 +98,40 @@ export default function StickyPlayer({ state }: StickyPlayerProps) {
             />
 
             <LogoScene isActive={state.scene === 5 || state.scene === 6} />
+          </div>
 
-            {/* Story text */}
-            {state.text && (
-              <div
-                ref={textRef}
-                className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none px-6"
-              >
-                <div className="max-w-[34rem] text-center">
-                  <div className="font-mono text-[10px] sm:text-xs font-bold tracking-[0.16em] uppercase text-[var(--color-accent)] mb-3">
-                    {state.eyebrow}
-                  </div>
-                  <h3
-                    className="font-display text-[clamp(24px,4vw,50px)] font-[800] tracking-[-0.04em] text-center leading-[1.02] text-[var(--color-ink)]"
-                    style={{ textShadow: "0 18px 44px oklch(5% 0.02 252 / 0.74)" }}
-                  >
-                    {state.text}
-                  </h3>
-                  <p className="mt-3 text-xs sm:text-sm text-[var(--color-ink-soft)] leading-relaxed">
-                    {state.description}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Controls */}
+          {/* Story text — never scaled */}
+          {state.text && (
             <div
-              className={`absolute inset-x-0 bottom-0 transition-[opacity,transform] duration-700 ${
-                state.showControls
-                  ? "opacity-100 translate-y-0"
-                  : "opacity-0 translate-y-4 pointer-events-none"
-              }`}
+              ref={textRef}
+              className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none px-6"
             >
-              <ControlBar progress={state.progress} />
+              <div className="max-w-[34rem] text-center">
+                <div className="font-mono text-[10px] sm:text-xs font-bold tracking-[0.16em] uppercase text-[var(--color-accent)] mb-3">
+                  {state.eyebrow}
+                </div>
+                <h3
+                  className="font-display text-[clamp(24px,4vw,50px)] font-[800] tracking-[-0.04em] text-center leading-[1.02] text-[var(--color-ink)]"
+                  style={{ textShadow: "0 18px 44px oklch(5% 0.02 252 / 0.74)" }}
+                >
+                  {state.text}
+                </h3>
+                <p className="mt-3 text-xs sm:text-sm text-[var(--color-ink-soft)] leading-relaxed">
+                  {state.description}
+                </p>
+              </div>
             </div>
+          )}
+
+          {/* Controls — never scaled */}
+          <div
+            className={`absolute inset-x-0 bottom-0 transition-[opacity,transform] duration-700 ${
+              state.showControls
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-4 pointer-events-none"
+            }`}
+          >
+            <ControlBar progress={state.progress} />
           </div>
         </div>
       </div>
