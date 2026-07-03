@@ -1,8 +1,5 @@
 "use client";
 
-import { useRef, useEffect } from "react";
-import gsap from "gsap";
-
 const features = [
   {
     icon: (
@@ -39,23 +36,21 @@ const features = [
   {
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-        <line x1="8" y1="21" x2="16" y2="21" />
-        <line x1="12" y1="17" x2="12" y2="21" />
-      </svg>
-    ),
-    title: "Movable Controls",
-    desc: "Drag the control bar anywhere in the window. Double-tap resets to center. Auto-hides when you're immersed.",
-  },
-  {
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-        <circle cx="12" cy="12" r="3" />
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
       </svg>
     ),
     title: "HDR & Visual Enhancements",
     desc: "Adaptive tone-mapping, highlight control, sharpening. Core Image filters make HDR content look stunning on any display.",
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+    ),
+    title: "Movable Controls",
+    desc: "Drag the control bar anywhere in the window. Double-tap resets to center. Auto-hides when you're immersed.",
   },
   {
     icon: (
@@ -70,71 +65,47 @@ const features = [
 ];
 
 export default function Features() {
-  const ref = useRef<HTMLElement>(null);
-  const cardsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const cards = cardsRef.current?.querySelectorAll(".feature-card");
-    if (!cards) return;
-
-    cards.forEach((card, i) => {
-      gsap.fromTo(
-        card,
-        { opacity: 0, y: 30 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.6,
-          delay: i * 0.08,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: card as HTMLElement,
-            start: "top 85%",
-            toggleActions: "play none none none",
-          },
-        }
-      );
-    });
-  }, []);
-
   return (
-      <section
-      id="features"
-      ref={ref}
-      className="content-section"
-    >
-      <div className="section-head">
-        <h2 className="section-title">
-          Built for cinematic playback.
-        </h2>
-        <p className="section-copy">
-          Every detail of Rift is engineered for immersive, frame-perfect video
-          playback on macOS: the render path, the control surface, and the way
-          the interface disappears when the picture needs the room.
-        </p>
-      </div>
-
-      <div
-        ref={cardsRef}
-        className="feature-grid"
-      >
-        {features.map((f, i) => (
-          <div
-            key={i}
-            className={`feature-card ${i < 2 ? "feature-card--wide" : ""}`}
-          >
-            <div className="feature-card__top">
-              <div className="feature-icon" aria-hidden="true">
-                {f.icon}
-              </div>
-              <span className="feature-index">{String(i + 1).padStart(2, "0")}</span>
-            </div>
-            <div>
-              <h3>{f.title}</h3>
-              <p>{f.desc}</p>
-            </div>
+    <section id="features" className="ay-section ay-section--dark">
+      <div className="ay-inner">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "clamp(1.5rem, 5vw, 4rem)",
+            alignItems: "end",
+            marginBlockEnd: "clamp(2rem, 5vw, 4rem)",
+          }}
+        >
+          <div>
+            <div className="ay-label ay-label--dark">Features</div>
+            <h2 className="ay-heading ay-heading--dark" style={{ marginTop: "var(--space-md)" }}>
+              Built for cinematic playback.
+            </h2>
           </div>
-        ))}
+          <p className="ay-sub ay-sub--dark">
+            Every detail of Rift is engineered for immersive, frame-perfect video
+            playback on macOS: the render path, the control surface, and the way
+            the interface disappears when the picture needs the room.
+          </p>
+        </div>
+
+        <div className="ay-grid-3">
+          {features.map((f, i) => (
+            <div key={i} className="ay-card ay-card--dark">
+              <div>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBlockEnd: "var(--space-lg)" }}>
+                  <div className="ay-icon" style={{ margin: 0 }}>
+                    {f.icon}
+                  </div>
+                  <span className="ay-index ay-index--dark">{String(i + 1).padStart(2, "0")}</span>
+                </div>
+                <h3>{f.title}</h3>
+                <p>{f.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

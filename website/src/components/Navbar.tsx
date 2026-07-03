@@ -1,45 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useLenis } from "lenis/react";
 
 export default function Navbar() {
   const ref = useRef<HTMLElement>(null);
 
-  useEffect(() => {
+  useLenis((lenis) => {
     const el = ref.current;
     if (!el) return;
-
-    const threshold = 80;
-    let floating = false;
-    let ticking = false;
-
-    const update = () => {
-      const next = window.scrollY > threshold;
-      if (next !== floating) {
-        floating = next;
-        el.classList.toggle("is-floating", floating);
-      }
-    };
-
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        update();
-        ticking = false;
-      });
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    update();
-
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-    };
-  }, []);
+    el.classList.toggle("is-floating", lenis.scroll <= 80);
+  });
 
   return (
-    <nav ref={ref} className="site-nav" aria-label="Primary navigation">
+    <nav ref={ref} className="site-nav is-floating" aria-label="Primary navigation">
       <div className="site-nav__inner">
         <a href="#hero" className="nav-wordmark">
           <span className="nav-mark" aria-hidden="true">
@@ -47,7 +21,7 @@ export default function Navbar() {
               <polygon points="8 5 19 12 8 19 8 5" />
             </svg>
           </span>
-          <span className="font-display text-[0.98rem] font-[800] tracking-[-0.04em]">
+          <span className="font-display text-[0.98rem] font-[700] tracking-[-0.04em]">
             Rift
           </span>
         </a>
