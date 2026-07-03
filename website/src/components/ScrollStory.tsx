@@ -191,7 +191,21 @@ export default function ScrollStory() {
           </div>
 
           <div className="min-w-0">
-            <StickyPlayer state={state} isPlaying={isPlaying} onPlayToggle={() => setIsPlaying((v) => !v)} />
+            <StickyPlayer
+              state={state}
+              isPlaying={isPlaying}
+              onPlayToggle={() => setIsPlaying((v) => !v)}
+              onPrev={() => {
+                const p = Math.max(0, state.progress - 0.15);
+                scrollProgressRef.current = p;
+                timerProgressRef.current = p;
+              }}
+              onNext={() => {
+                const p = Math.min(1, state.progress + 0.15);
+                scrollProgressRef.current = p;
+                timerProgressRef.current = p;
+              }}
+            />
             <div className="story-side" aria-hidden="true">
               {STORY_LABELS.map((label, index) => (
                 <div

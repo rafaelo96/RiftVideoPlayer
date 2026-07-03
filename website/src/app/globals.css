@@ -54,10 +54,6 @@ a {
   touch-action: manipulation;
 }
 
-:focus {
-  outline: none;
-}
-
 :focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 3px;
@@ -165,9 +161,87 @@ a {
 }
 
 .nav-links {
-  display: none;
+  display: flex;
   align-items: center;
   gap: clamp(1.2rem, 3vw, 2rem);
+}
+
+@media (max-width: 48rem) {
+  .nav-links {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2rem;
+    background: oklch(10% 0.02 252 / 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .nav-links--open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .nav-links .nav-link {
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+}
+
+.nav-overlay {
+  display: none;
+}
+
+@media (max-width: 48rem) {
+  .nav-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+  }
+}
+
+.nav-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  z-index: 1001;
+  padding: 0;
+}
+
+@media (max-width: 48rem) {
+  .nav-hamburger {
+    display: flex;
+  }
+}
+
+.nav-hamburger__line {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: #fff;
+  border-radius: 1px;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.nav-hamburger__line--open:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+.nav-hamburger__line--open:nth-child(2) {
+  opacity: 0;
+}
+.nav-hamburger__line--open:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
 }
 
 .nav-link {
@@ -681,6 +755,11 @@ a {
   50% { opacity: 0.8; }
 }
 
+@keyframes ray-sweep {
+  0%, 100% { transform: translateX(-100%) skewX(-15deg); }
+  50% { transform: translateX(200%) skewX(-15deg); }
+}
+
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
@@ -783,9 +862,8 @@ a {
   *,
   *::before,
   *::after {
-    animation-duration: 150ms !important;
-    animation-iteration-count: 1 !important;
+    animation: none !important;
+    transition: none !important;
     scroll-behavior: auto !important;
-    transition-duration: 150ms !important;
   }
 }

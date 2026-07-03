@@ -180,8 +180,10 @@ struct ContentView: View {
             setupKeyboardMonitor()
             handleOpenURLs(AppDelegate.takePendingOpenURLs())
             generateParticles()
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                promptPulse = 1.0
+            if !state.hasVideo {
+                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                    promptPulse = 1.0
+                }
             }
         }
         .onDisappear {
@@ -191,6 +193,13 @@ struct ContentView: View {
         }
         .onChange(of: state.isPlaying) {
             resetHideTimer()
+        }
+        .onChange(of: state.hasVideo) { hasVideo in
+            if hasVideo {
+                withAnimation(.interactiveSpring) {
+                    promptPulse = 0
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .riftOpenURLs)) { notification in
             let urls = notification.userInfo?["urls"] as? [URL] ?? []
@@ -220,8 +229,11 @@ struct ContentView: View {
         NSCursor.unhide()
     }
 
+    private static var sharedKeyboardMonitor: AnyObject?
+
     private func setupKeyboardMonitor() {
-        keyboardEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
+        Self.cleanupSharedKeyboardMonitor()
+        let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [self] event in
             guard state.hasVideo else { return event }
 
             switch event.keyCode {
@@ -264,6 +276,15 @@ struct ContentView: View {
             default:
                 return event
             }
+        }
+        keyboardEventMonitor = monitor
+        Self.sharedKeyboardMonitor = monitor as AnyObject
+    }
+
+    private static func cleanupSharedKeyboardMonitor() {
+        if let existing = Self.sharedKeyboardMonitor {
+            NSEvent.removeMonitor(existing)
+            Self.sharedKeyboardMonitor = nil
         }
     }
 
@@ -389,16 +410,16 @@ struct ContentView: View {
     }
 
     private var filmGrainOverlay: some View {
-        TimelineView(.animation(paused: false)) { timeline in
-            let seed = Int(timeline.date.timeIntervalSinceReferenceDate * 24)
+        TimelineView(.animation(minimumInterval: 1.0 / 6)) { timeline in
+            let seed = Int(timeline.date.timeIntervalSinceReferenceDate * 6)
             Canvas { context, size in
                 for row in 0..<Int(size.height / 4) {
                     for col in 0..<Int(size.width / 3) {
                         let hash = seed ^ (row * 137) ^ (col * 251)
                         let gray = Double((hash & 0xFF)) / 512.0
                         let rect = CGRect(
-                            x: CGFloat(col) * 3 + CGFloat.random(in: -0.5...0.5),
-                            y: CGFloat(row) * 4 + CGFloat.random(in: -0.5...0.5),
+                            x: CGFloat(col) * 3,
+                            y: CGFloat(row) * 4,
                             width: 2.5,
                             height: 3.5
                         )

@@ -92,7 +92,7 @@ export default function Features() {
 
         <div className="ay-grid-3">
           {features.map((f, i) => (
-            <div key={i} className="ay-card ay-card--dark">
+            <div key={f.title} className="ay-card ay-card--dark">
               <div>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBlockEnd: "var(--space-lg)" }}>
                   <div className="ay-icon" style={{ margin: 0 }}>

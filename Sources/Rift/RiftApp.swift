@@ -81,6 +81,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             guard NSApp.windows.isEmpty, fallbackWindow == nil else { return }
 
+            if let existingWindow = NSApp.windows.first(where: { $0.contentViewController?.view is ContentView }) {
+                existingWindow.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
+
             let rootView = ContentView()
                 .frame(minWidth: 780, minHeight: 480)
             let hostingController = NSHostingController(rootView: rootView)
