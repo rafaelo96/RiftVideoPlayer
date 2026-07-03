@@ -22,9 +22,11 @@ export interface StoryState {
 
 interface StickyPlayerProps {
   state: StoryState;
+  isPlaying: boolean;
+  onPlayToggle: () => void;
 }
 
-export default function StickyPlayer({ state }: StickyPlayerProps) {
+export default function StickyPlayer({ state, isPlaying, onPlayToggle }: StickyPlayerProps) {
   const textRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<HTMLDivElement>(null);
 
@@ -131,7 +133,7 @@ export default function StickyPlayer({ state }: StickyPlayerProps) {
                 : "opacity-0 translate-y-4 pointer-events-none"
             }`}
           >
-            <ControlBar progress={state.progress} />
+            <ControlBar progress={state.progress} isPlaying={isPlaying} onPlayToggle={onPlayToggle} />
           </div>
         </div>
       </div>
