@@ -35,37 +35,52 @@ const specs = [
 
 export default function Technology() {
   return (
-    <section id="technology" className="content-section">
-      <div className="section-head">
-        <h2 className="section-title">A player with a real pipeline.</h2>
-        <p className="section-copy">
-          The technology section is now a proper spec sheet: easier to scan,
-          stable across widths, and less likely to drift out of alignment while
-          the page animates around it.
-        </p>
-      </div>
+    <section id="technology" className="ay-section">
+      <div className="ay-inner">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "clamp(1.5rem, 5vw, 4rem)",
+            alignItems: "end",
+            marginBlockEnd: "clamp(2rem, 5vw, 4rem)",
+          }}
+        >
+          <div>
+            <div className="ay-label">Pipeline</div>
+            <h2 className="ay-heading" style={{ marginTop: "var(--space-md)" }}>
+              A player with a real pipeline.
+            </h2>
+          </div>
+          <p className="ay-sub">
+            Every component is chosen for performance: Metal rendering, RIFE
+            neural interpolation, and HDR tone mapping that preserves the
+            director&rsquo;s intent.
+          </p>
+        </div>
 
-      <div className="spec-wrap">
-        <table className="spec-table">
-          <thead>
-            <tr>
-              <th scope="col">System</th>
-              <th scope="col">Value</th>
-              <th scope="col">Why it matters</th>
-            </tr>
-          </thead>
-          <tbody>
-            {specs.map((spec) => (
-              <tr key={spec.name}>
-                <th scope="row">{spec.name}</th>
-                <td className="spec-value" data-label="Value">
-                  {spec.value}
-                </td>
-                <td data-label="Why it matters">{spec.detail}</td>
+        <div className="spec-wrap">
+          <table className="spec-table">
+            <thead>
+              <tr>
+                <th scope="col">System</th>
+                <th scope="col">Value</th>
+                <th scope="col">Why it matters</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {specs.map((spec) => (
+                <tr key={spec.name}>
+                  <th scope="row">{spec.name}</th>
+                  <td style={{ color: "var(--color-accent)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                    {spec.value}
+                  </td>
+                  <td data-label="Why it matters">{spec.detail}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );
