@@ -757,6 +757,45 @@ a {
     0 0 0 1px oklch(70% 0.04 245 / 0.08);
 }
 
+/* ─── Category chips ─── */
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.category-chip[data-category="Render"] {
+  background: oklch(70% 0.16 245 / 0.14);
+  color: oklch(70% 0.16 245);
+}
+
+.category-chip[data-category="AI"] {
+  background: oklch(75% 0.16 62 / 0.14);
+  color: oklch(75% 0.16 62);
+}
+
+.category-chip[data-category="Display"] {
+  background: oklch(74% 0.14 154 / 0.14);
+  color: oklch(74% 0.14 154);
+}
+
+.category-chip[data-category="Format"] {
+  background: oklch(65% 0.18 28 / 0.14);
+  color: oklch(65% 0.18 28);
+}
+
+.category-chip[data-category="Platform"] {
+  background: oklch(69% 0.018 252 / 0.14);
+  color: oklch(69% 0.018 252);
+}
+
 /* ─── Keyframes ─── */
 
 @keyframes float {

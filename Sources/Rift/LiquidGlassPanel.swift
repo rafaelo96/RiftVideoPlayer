@@ -8,39 +8,22 @@ struct GlassBackground: View {
     var blendsWithWindow: Bool = false
 
     var body: some View {
-        ZStack {
-            NativeVisualEffectView(
-                material: .hudWindow,
-                blendingMode: blendsWithWindow ? .withinWindow : .behindWindow
-            )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.45, green: 0.70, blue: 1.0).opacity(0.02),
-                            .clear
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(.black.opacity(0.18))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(0.06),
+                                .white.opacity(0.015),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
                     )
-                )
-
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            .white.opacity(0.12),
-                            .white.opacity(0.04),
-                            Color(red: 0.30, green: 0.55, blue: 1.0).opacity(0.04)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 0.5
-                )
-        }
+            }
     }
 }
 

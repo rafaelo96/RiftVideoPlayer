@@ -16,13 +16,13 @@ export default function ControlBar({ progress, isPlaying, onPlayToggle, onPrev, 
   const progressRef = useRef<HTMLDivElement>(null);
   const fpsRef = useRef<HTMLSpanElement>(null);
   const [isMuted, setIsMuted] = useState(false);
-  const [showControls, setShowControls] = useState(true);
+  const [showControls] = useState(true);
 
   useEffect(() => {
     if (!progressRef.current) return;
     gsap.to(progressRef.current, {
       width: `${progress * 100}%`,
-      duration: 0.4,
+      duration: 0.3,
       ease: "power2.out",
       overwrite: "auto",
     });
@@ -74,7 +74,7 @@ export default function ControlBar({ progress, isPlaying, onPlayToggle, onPrev, 
                 type="button"
                 aria-label={isMuted ? "Unmute preview audio" : "Mute preview audio"}
                 onClick={() => setIsMuted((v) => !v)}
-                className="w-7 h-7 flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)] transition-colors"
+                className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 w-full sm:w-8 h-full sm:h-8 flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)] transition-colors"
               >
                 {isMuted ? (
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -111,9 +111,9 @@ export default function ControlBar({ progress, isPlaying, onPlayToggle, onPrev, 
               type="button"
               aria-label="Previous chapter"
               onClick={onPrev}
-              className="w-8 h-8 sm:w-7 sm:h-7 rounded-full border border-[var(--color-rule)] flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)] transition-colors"
+              className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 w-full sm:w-9 h-full sm:h-9 rounded-full border border-[var(--color-rule)] flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)] transition-colors"
             >
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="13 5 6 12 13 19 13 5" />
                 <line x1="18" y1="5" x2="18" y2="19" />
               </svg>
@@ -122,15 +122,15 @@ export default function ControlBar({ progress, isPlaying, onPlayToggle, onPrev, 
               type="button"
               aria-label={isPlaying ? "Pause preview" : "Play preview"}
               onClick={onPlayToggle}
-              className="w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-[var(--color-accent)] text-[var(--color-accent-ink)] flex items-center justify-center hover:-translate-y-px active:translate-y-0 transition-transform"
+              className="min-w-[44px] min-h-[44px] w-full sm:w-10 h-full sm:h-10 rounded-full bg-[var(--color-accent)] text-[var(--color-accent-ink)] flex items-center justify-center hover:-translate-y-px active:translate-y-0 transition-transform"
             >
               {isPlaying ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <rect x="6" y="4" width="4" height="16" />
                   <rect x="14" y="4" width="4" height="16" />
                 </svg>
               ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <polygon points="8 5 19 12 8 19 8 5" />
                 </svg>
               )}
@@ -139,7 +139,7 @@ export default function ControlBar({ progress, isPlaying, onPlayToggle, onPrev, 
               type="button"
               aria-label="Next chapter"
               onClick={onNext}
-              className="w-8 h-8 sm:w-7 sm:h-7 rounded-full border border-[var(--color-rule)] flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)] transition-colors"
+              className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 w-full sm:w-9 h-full sm:h-9 rounded-full border border-[var(--color-rule)] flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)] transition-colors"
             >
               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="11 5 18 12 11 19 11 5" />

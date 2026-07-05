@@ -103,17 +103,37 @@ export default function Features() {
           </div>
         </div>
 
-        {/* Grid of 2 columns with the remaining 5 features */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-          {features.slice(1).map((f, i) => (
+        {/* Staggered grid — first row: 2 cols, second row: 3 cols for variety */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid var(--color-rule)" }}>
+          {features.slice(1, 3).map((f, i) => (
             <div
               key={f.title}
               className="bordered"
               style={{
                 borderColor: "var(--color-rule)",
                 padding: "clamp(1.5rem, 3vw, 2.5rem)",
-                borderRight: i % 2 === 0 ? "1px solid var(--color-rule)" : "none",
-                borderBottom: i < features.length - 2 ? "1px solid var(--color-rule)" : "none",
+                borderRight: i === 0 ? "1px solid var(--color-rule)" : "none",
+                borderBottom: 0,
+              }}
+            >
+              <div className="ay-icon" style={{ margin: "0 0 var(--space-md)" }}>
+                {f.icon}
+              </div>
+              <h3>{f.title}</h3>
+              <p>{f.desc}</p>
+            </div>
+          ))}
+        </div>
+        {/* Second row — 3 items */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
+          {features.slice(3).map((f, i) => (
+            <div
+              key={f.title}
+              className="bordered"
+              style={{
+                borderColor: "var(--color-rule)",
+                padding: "clamp(1.5rem, 3vw, 2.5rem)",
+                borderRight: i < 2 ? "1px solid var(--color-rule)" : "none",
               }}
             >
               <div className="ay-icon" style={{ margin: "0 0 var(--space-md)" }}>

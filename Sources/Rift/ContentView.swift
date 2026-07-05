@@ -6,9 +6,8 @@ import AppKit
 
 private struct RiftLogo: View {
     var body: some View {
-        if let bundleURL = Bundle.main.url(forResource: "Rift_Rift", withExtension: "bundle"),
-           let bundle = Bundle(url: bundleURL),
-           let url = bundle.url(forResource: "rift-logo", withExtension: "svg"),
+        if let url = Bundle.main.url(forResource: "rift-logo", withExtension: "svg")
+            ?? Bundle.main.url(forResource: "rift-logo", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             Image(nsImage: image)
                 .resizable()
@@ -36,9 +35,10 @@ struct ContentView: View {
 
     @State private var areControlsVisible = true
     @State private var isHoveringControls = false
-    @State private var hideControlsTask: Task<Void, Never>? = nil
-    @State private var mouseEventMonitor: Any? = nil
+    @State private var lastInteraction = Date.now
+    @State private var autoHideTimer: Timer?
     @State private var keyboardEventMonitor: Any? = nil
+    @State private var windowSize: CGSize = .zero
 
     @State private var particles: [AmbientParticle] = []
     @State private var promptPulse: CGFloat = 0
@@ -111,8 +111,6 @@ struct ContentView: View {
 
             GeometryReader { geometry in
                 ZStack {
-                    controlsContrastField
-
                     PlayerControlsView(state: state)
                 }
                 .opacity(areControlsVisible ? 1.0 : 0.0)
@@ -131,7 +129,15 @@ struct ContentView: View {
                 .onAppear {
                     guard !isPositionInitialized else { return }
                     controlsPosition = CGPoint(x: geometry.size.width / 2, y: geometry.size.height - 82)
+                    windowSize = geometry.size
                     isPositionInitialized = true
+                }
+                .onChange(of: geometry.size) { _, newSize in
+                    guard windowSize.width > 0, windowSize.height > 0 else { return }
+                    let ratioX = controlsPosition.x / windowSize.width
+                    let ratioY = controlsPosition.y / windowSize.height
+                    controlsPosition = CGPoint(x: ratioX * newSize.width, y: ratioY * newSize.height)
+                    windowSize = newSize
                 }
                 .gesture(
                     DragGesture()
@@ -172,11 +178,14 @@ struct ContentView: View {
             }
         }
         .background(appBackdrop)
+        .onContinuousHover { _ in
+            resetHideTimer()
+        }
         .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTargeted, perform: handleDrop)
         .animation(.spring(response: 0.34, dampingFraction: 0.82), value: state.hasVideo)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isDropTargeted)
         .onAppear {
-            setupMouseMonitor()
+            startHideTimer()
             setupKeyboardMonitor()
             handleOpenURLs(AppDelegate.takePendingOpenURLs())
             generateParticles()
@@ -187,7 +196,8 @@ struct ContentView: View {
             }
         }
         .onDisappear {
-            cleanupMouseMonitor()
+            stopHideTimer()
+            NSCursor.unhide()
             cleanupKeyboardMonitor()
             state.cleanup()
         }
@@ -199,34 +209,22 @@ struct ContentView: View {
                 withAnimation(.interactiveSpring) {
                     promptPulse = 0
                 }
+                resetHideTimer()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .riftOpenURLs)) { notification in
             let urls = notification.userInfo?["urls"] as? [URL] ?? []
             handleOpenURLs(urls)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .riftOpenVideo)) { _ in
+            state.openVideo()
+        }
+        .focusedValue(\.playerState, state)
     }
 
     private var usesMetalRenderer: Bool {
         guard !state.usesNativeVideoLayer else { return false }
         return MTLCreateSystemDefaultDevice() != nil
-    }
-
-    private func setupMouseMonitor() {
-        mouseEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDown, .rightMouseDown]) { event in
-            resetHideTimer()
-            return event
-        }
-    }
-
-    private func cleanupMouseMonitor() {
-        if let monitor = mouseEventMonitor {
-            NSEvent.removeMonitor(monitor)
-            mouseEventMonitor = nil
-        }
-        hideControlsTask?.cancel()
-        hideControlsTask = nil
-        NSCursor.unhide()
     }
 
     private static var sharedKeyboardMonitor: AnyObject?
@@ -263,6 +261,11 @@ struct ContentView: View {
                 if !event.modifierFlags.contains(.command) { return event }
                 state.setVolume(state.volume > 0 ? 0 : 0.72)
                 return nil
+            case 4: // H - toggle controls
+                withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
+                    areControlsVisible.toggle()
+                }
+                return nil
             case 18...21: // Number keys 1-4
                 let speeds: [Float] = [1.0, 1.5, 2.0, 0.5]
                 let idx = Int(event.keyCode - 18)
@@ -295,27 +298,33 @@ struct ContentView: View {
         }
     }
 
+    private func startHideTimer() {
+        autoHideTimer?.invalidate()
+        autoHideTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [self] _ in
+            MainActor.assumeIsolated {
+                guard areControlsVisible else { return }
+                guard state.hasVideo else { return }
+                guard Date.now.timeIntervalSince(lastInteraction) >= 5 else { return }
+                withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
+                    areControlsVisible = false
+                }
+                NSCursor.hide()
+            }
+        }
+    }
+
+    private func stopHideTimer() {
+        autoHideTimer?.invalidate()
+        autoHideTimer = nil
+    }
+
     private func resetHideTimer() {
+        lastInteraction = Date.now
         if !areControlsVisible {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
                 areControlsVisible = true
             }
             NSCursor.unhide()
-        }
-
-        hideControlsTask?.cancel()
-
-        guard state.hasVideo && state.isPlaying else { return }
-        guard !isHoveringControls else { return }
-
-        hideControlsTask = Task {
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-
-            withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
-                areControlsVisible = false
-            }
-            NSCursor.hide()
         }
     }
 
@@ -360,25 +369,12 @@ struct ContentView: View {
 
     private var appBackdrop: some View {
         ZStack {
-            NativeVisualEffectView(
-                material: .hudWindow,
-                blendingMode: .behindWindow
-            )
-            .ignoresSafeArea()
-
-            LinearGradient(
-                colors: [
-                    Color(red: 0.010, green: 0.035, blue: 0.095).opacity(0.88),
-                    Color(red: 0.018, green: 0.075, blue: 0.190).opacity(0.82),
-                    Color(red: 0.008, green: 0.025, blue: 0.065).opacity(0.88)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            Color(red: 0.010, green: 0.035, blue: 0.095)
+                .ignoresSafeArea()
 
             RadialGradient(
                 colors: [
-                    Color(red: 0.22, green: 0.42, blue: 0.88).opacity(0.20),
+                    Color(red: 0.22, green: 0.42, blue: 0.88).opacity(0.12),
                     .clear
                 ],
                 center: .topTrailing,
@@ -388,22 +384,12 @@ struct ContentView: View {
 
             RadialGradient(
                 colors: [
-                    Color(red: 0.03, green: 0.14, blue: 0.42).opacity(0.30),
+                    Color(red: 0.03, green: 0.14, blue: 0.42).opacity(0.18),
                     .clear
                 ],
                 center: .center,
                 startRadius: 100,
                 endRadius: 720
-            )
-
-            RadialGradient(
-                colors: [
-                    Color(red: 0.55, green: 0.78, blue: 1.0).opacity(0.03),
-                    .clear
-                ],
-                center: .bottom,
-                startRadius: 40,
-                endRadius: 500
             )
         }
         .ignoresSafeArea()
@@ -554,20 +540,6 @@ struct ContentView: View {
         .ignoresSafeArea()
     }
 
-    private var controlsContrastField: some View {
-        LinearGradient(
-            colors: [
-                .clear,
-                Color(red: 0.06, green: 0.10, blue: 0.22).opacity(0.20),
-                .black.opacity(0.08)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(maxWidth: 880, maxHeight: 120)
-        .blur(radius: 18)
-        .allowsHitTesting(false)
-    }
 
     private func subtitleOverlay(_ text: String) -> some View {
         VStack {

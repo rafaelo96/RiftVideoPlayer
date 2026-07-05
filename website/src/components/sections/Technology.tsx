@@ -1,5 +1,7 @@
 "use client";
 
+const categories = ["Render", "AI", "Display", "Display", "Format", "Platform"] as const;
+
 const specs = [
   {
     name: "Render path",
@@ -63,14 +65,18 @@ export default function Technology() {
           <table className="spec-table">
             <thead>
               <tr>
+                <th scope="col">Area</th>
                 <th scope="col">System</th>
                 <th scope="col">Value</th>
                 <th scope="col">Why it matters</th>
               </tr>
             </thead>
             <tbody>
-              {specs.map((spec) => (
+              {specs.map((spec, i) => (
                 <tr key={spec.name}>
+                  <td>
+                    <span className="category-chip" data-category={categories[i]}>{categories[i]}</span>
+                  </td>
                   <th scope="row">{spec.name}</th>
                   <td style={{ color: "var(--color-accent)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
                     {spec.value}
