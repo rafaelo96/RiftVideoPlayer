@@ -14,18 +14,32 @@
 
 html {
   scroll-behavior: auto;
-  background: #000;
+  background: oklch(5% 0.008 252);
   overflow-x: clip;
   scroll-padding-top: 6rem;
 }
 
 body {
-  background: #000;
+  background: oklch(5% 0.008 252);
   color: var(--color-text-primary);
   font-family: var(--font-body);
   overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.35;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  mix-blend-mode: overlay;
 }
 
 ::selection {
@@ -278,7 +292,7 @@ a {
 .story-section {
   position: relative;
   min-height: 285dvh;
-  background: #000;
+  background: oklch(5% 0.008 252);
   border-bottom: 1px solid var(--color-rule);
 }
 
@@ -438,7 +452,7 @@ a {
 }
 
 .ay-section--dark {
-  background: #000;
+  background: oklch(5% 0.008 252);
   color: var(--color-ink);
   border-bottom-color: var(--color-rule);
 }
