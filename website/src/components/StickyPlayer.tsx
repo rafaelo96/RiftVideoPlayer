@@ -134,6 +134,7 @@ export default function StickyPlayer({ state, isPlaying, onPlayToggle, onPrev, o
                 ? "opacity-100 translate-y-0"
                 : "opacity-0 translate-y-4 pointer-events-none"
             }`}
+            inert={!state.showControls ? true : undefined}
           >
             <ControlBar progress={state.progress} isPlaying={isPlaying} onPlayToggle={onPlayToggle} onPrev={onPrev} onNext={onNext} />
           </div>
