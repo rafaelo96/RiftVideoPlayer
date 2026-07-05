@@ -168,8 +168,12 @@ export default function ScrollStory() {
               pointerEvents: heroHidden ? "none" : "auto",
             }}
           >
-            <div className="hero-kicker">Frame+ AI interpolation</div>
+            <div className="hero-kicker">
+              <span className="w-2 h-2 rounded-full bg-[var(--color-accent)] shadow-[0_0_12px_var(--color-accent-soft)]" />
+              Frame+ AI interpolation
+            </div>
             <h1 className="hero-title">Video, made native.</h1>
+            <div className="w-12 h-[2px] bg-gradient-to-r from-[var(--color-accent)] to-transparent mt-4 mb-6" />
             <p className="hero-lede">
               Rift turns your Mac into a clean cinema surface: HDR playback,
               Metal rendering, FFmpeg support, and controls that shrink away as
