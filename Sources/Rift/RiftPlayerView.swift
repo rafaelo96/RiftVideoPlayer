@@ -62,7 +62,8 @@ final class MetalVideoView: MTKView {
         enableSetNeedsDisplay = true
         isPaused = true
         preferredFramesPerSecond = 60
-        colorPixelFormat = .bgra8Unorm
+        // 10-bit pixel format eliminates banding in dark gradients
+        colorPixelFormat = MTLPixelFormat.bgra10_xr
         clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         layer?.isOpaque = true
         if let metalLayer = layer as? CAMetalLayer {
@@ -70,6 +71,7 @@ final class MetalVideoView: MTKView {
             metalLayer.presentsWithTransaction = false
             metalLayer.allowsNextDrawableTimeout = false
             metalLayer.maximumDrawableCount = 3
+            metalLayer.wantsExtendedDynamicRangeContent = true
         }
     }
 
@@ -299,7 +301,10 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
                 options: [
                     .cacheIntermediates: false,
                     .workingColorSpace: renderColorSpace,
-                    .outputColorSpace: renderColorSpace
+                    .outputColorSpace: renderColorSpace,
+                    .workingFormat: CIFormat.RGBAh,  // 16-bit half-float internal
+                    .outputPremultiplied: true,
+                    .useSoftwareRenderer: false
                 ]
             )
             var cache: CVMetalTextureCache?

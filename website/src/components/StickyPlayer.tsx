@@ -34,35 +34,31 @@ export default function StickyPlayer({ state, isPlaying, onPlayToggle, onPrev, o
 
   // Animate main text
   useEffect(() => {
-    if (!textRef.current) return;
+    const el = textRef.current;
+    if (!el) return;
     const tween = gsap.fromTo(
-      textRef.current,
+      el,
       { opacity: 0, y: 20, filter: "blur(8px)" },
       {
         opacity: 1,
         y: 0,
         filter: "blur(0px)",
-        duration: 0.8,
+        duration: 0.6,
         ease: "power3.out",
         overwrite: "auto",
       }
     );
     return () => {
       tween.kill();
-      gsap.killTweensOf(textRef.current);
+      gsap.killTweensOf(el);
     };
   }, [state.text]);
 
   return (
     <div className="w-full flex justify-center px-0 sm:px-4">
       <div className="relative w-full max-w-[980px] rounded-[1.15rem] overflow-hidden premium-shadow">
-        {/* macOS window bar — never scaled */}
+        {/* Window bar — never scaled */}
         <div className="relative z-10 flex items-center gap-2 px-3 sm:px-4 py-[10px] bg-[var(--color-panel-solid)] border-b border-[var(--color-rule)]">
-          <div className="flex items-center gap-[5px]">
-            <div className="w-[10px] h-[10px] rounded-full bg-[#FF5F57]" />
-            <div className="w-[10px] h-[10px] rounded-full bg-[#FEBC2E]" />
-            <div className="w-[10px] h-[10px] rounded-full bg-[#28C840]" />
-          </div>
           <div className="flex-1 text-center">
             <span className="text-[10px] font-medium text-[var(--color-muted)] tracking-wide">
               Rift — 4K HDR Demo.mov

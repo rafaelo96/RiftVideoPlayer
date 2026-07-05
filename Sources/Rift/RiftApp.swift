@@ -3,6 +3,18 @@ import AppKit
 
 extension Notification.Name {
     static let riftOpenURLs = Notification.Name("RiftOpenURLs")
+    static let riftOpenVideo = Notification.Name("RiftOpenVideo")
+}
+
+struct PlayerStateKey: FocusedValueKey {
+    typealias Value = PlayerState
+}
+
+extension FocusedValues {
+    var playerState: PlayerState? {
+        get { self[PlayerStateKey.self] }
+        set { self[PlayerStateKey.self] = newValue }
+    }
 }
 
 @main
@@ -20,6 +32,30 @@ struct RiftApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) { }
+            CommandMenu("File") {
+                Button("Open File...") {
+                    NotificationCenter.default.post(name: .riftOpenVideo, object: nil)
+                }
+                .keyboardShortcut("o", modifiers: .command)
+            }
+            CommandGroup(replacing: .appInfo) {
+                Button("About Rift") {
+                    NSApplication.shared.orderFrontStandardAboutPanel(
+                        options: [
+                            .applicationName: "Rift",
+                            .applicationVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0",
+                            .version: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1",
+                            .credits: NSAttributedString(
+                                string: "A native video player with Frame⁺ AI interpolation, HDR support, and Metal-accelerated rendering.",
+                                attributes: [
+                                    .font: NSFont.systemFont(ofSize: 11),
+                                    .foregroundColor: NSColor.secondaryLabelColor
+                                ]
+                            )
+                        ]
+                    )
+                }
+            }
         }
     }
 }

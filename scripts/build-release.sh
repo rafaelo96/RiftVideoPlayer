@@ -16,8 +16,8 @@ set -euo pipefail
 CONFIG="${1:-release}"
 BUILD_DIR=".build"
 PRODUCT="Rift"
-APP_BUNDLE="build/$PRODUCT.app"
-DMG_PATH="build/$PRODUCT.dmg"
+APP_BUNDLE="$PRODUCT.app"
+DMG_PATH="$PRODUCT.dmg"
 VERSION=$(grep -m1 'MARKETING_VERSION' Rift.xcodeproj 2>/dev/null || echo "1.0")
 
 echo "=== Building $PRODUCT v$VERSION ($CONFIG) ==="
@@ -34,7 +34,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$BUILD_DIR/$CONFIG/$PRODUCT" "$APP_BUNDLE/Contents/MacOS/"
 cp -R Sources/Rift/Resources/* "$APP_BUNDLE/Contents/Resources/" 2>/dev/null || true
-cp Info.plist "$APP_BUNDLE/Contents/" 2>/dev/null || echo "Warning: No Info.plist found"
+cp Sources/Rift/Info.plist "$APP_BUNDLE/Contents/"
 
 # 3. Sign (requires Apple Developer Program)
 if [ "${SKIP_SIGN:-false}" != "true" ]; then
@@ -51,7 +51,7 @@ fi
 
 # 4. Create DMG
 echo "--- Creating DMG ---"
-mkdir -p build
+mkdir -p "$(dirname "$APP_BUNDLE")"
 hdiutil create -volname "$PRODUCT" -srcfolder "$APP_BUNDLE" \
     -ov -format UDZO "$DMG_PATH"
 

@@ -7,9 +7,11 @@ struct PlayerControlsView: View {
     @State private var dragSliderValue: Double = 0
     @State private var isSeekingPreview = false
     @State private var previewTime: Double = 0
+    @State private var showAudioMenu = false
+    @State private var showSubsMenu = false
 
     var body: some View {
-        LiquidGlassPanel(cornerRadius: 18) {
+        LiquidGlassPanel(cornerRadius: 18, blendsWithWindow: true) {
             VStack(spacing: 12) {
                 HStack {
                     Spacer(minLength: 24)
@@ -191,7 +193,7 @@ struct PlayerControlsView: View {
     // MARK: - Options Bar
 
     private var optionsBar: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             interpolationButton
             speedButton
             visualButton
@@ -202,8 +204,6 @@ struct PlayerControlsView: View {
 
             subtitleButton
         }
-        .padding(5)
-        .background(GlassCapsule())
     }
 
     // MARK: - Option Buttons
@@ -268,63 +268,77 @@ struct PlayerControlsView: View {
     }
 
     private var audioTrackButton: some View {
-        let activeLabel = state.audioTracks.indices.contains(state.selectedAudioTrackIndex)
-            ? state.audioTracks[state.selectedAudioTrackIndex].label
-            : "Audio"
-
-        return Menu {
-            ForEach(state.audioTracks) { track in
-                Button {
-                    withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
-                        state.selectAudioTrack(track.id)
-                    }
-                } label: {
-                    optionMenuRow(title: track.label, selected: track.id == state.selectedAudioTrackIndex)
-                }
-            }
+        return Button {
+            showAudioMenu = true
         } label: {
             glassPill(
-                title: activeLabel,
+                title: "Audio",
                 systemName: "music.note.list",
                 isActive: state.selectedAudioTrackIndex != 0,
                 hint: NSLocalizedString("Audio Track", comment: "")
             )
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel(NSLocalizedString("Audio Track", comment: ""))
+        .popover(isPresented: $showAudioMenu, arrowEdge: .bottom) {
+            VStack(spacing: 0) {
+                ForEach(state.audioTracks) { track in
+                    Button {
+                        showAudioMenu = false
+                        withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
+                            state.selectAudioTrack(track.id)
+                        }
+                    } label: {
+                        optionMenuRow(title: track.label, selected: track.id == state.selectedAudioTrackIndex)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(6)
+        }
     }
 
     private var subtitleButton: some View {
         let subtitleTracks = state.availableTracks.filter { $0.kind == .subtitle }
 
-        return Menu {
-            Button {
-                withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
-                    state.selectPipelineTrack(nil)
-                }
-            } label: {
-                optionMenuRow(title: "None", selected: state.selectedSubtitleTrack == nil)
-            }
-
-            ForEach(subtitleTracks) { track in
-                Button {
-                    withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
-                        state.selectPipelineTrack(track)
-                    }
-                } label: {
-                    optionMenuRow(title: track.label, selected: state.selectedSubtitleTrack == track)
-                }
-            }
+        return Button {
+            showSubsMenu = true
         } label: {
             glassPill(
-                title: state.selectedSubtitleTrack?.label ?? "Subs",
+                title: "Subs",
                 systemName: "captions.bubble",
                 isActive: state.selectedSubtitleTrack != nil,
                 hint: NSLocalizedString("Subtitles", comment: "")
             )
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel(NSLocalizedString("Subtitles", comment: ""))
+        .popover(isPresented: $showSubsMenu, arrowEdge: .bottom) {
+            VStack(spacing: 0) {
+                Button {
+                    showSubsMenu = false
+                    withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
+                        state.selectPipelineTrack(nil)
+                    }
+                } label: {
+                    optionMenuRow(title: "None", selected: state.selectedSubtitleTrack == nil)
+                }
+                .buttonStyle(.plain)
+
+                ForEach(subtitleTracks) { track in
+                    Button {
+                        showSubsMenu = false
+                        withAnimation(.spring(response: 0.26, dampingFraction: 0.7)) {
+                            state.selectPipelineTrack(track)
+                        }
+                    } label: {
+                        optionMenuRow(title: track.label, selected: state.selectedSubtitleTrack == track)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(6)
+        }
     }
 
     // MARK: - Timeline with Chapter Support
@@ -345,35 +359,32 @@ struct PlayerControlsView: View {
     // MARK: - Glass Pill
 
     private func glassPill(title: String, systemName: String, isActive: Bool, hint: String) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             Image(systemName: systemName)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .frame(width: 13)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .frame(width: 12)
 
             Text(title)
-                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .lineLimit(1)
-                .minimumScaleFactor(0.78)
+                .fixedSize()
         }
-        .foregroundStyle(isActive ? .white : .white.opacity(0.65))
-        .frame(width: 94, height: 28)
+        .foregroundStyle(isActive ? .white : .white.opacity(0.6))
+        .frame(height: 24)
+        .padding(.horizontal, 10)
         .background {
-            Capsule()
-                .fill(isActive
-                    ? accentColor.opacity(0.22)
-                    : .white.opacity(0.05))
-        }
-        .overlay {
-            if isActive {
+            ZStack {
                 Capsule()
-                    .stroke(
-                        LinearGradient(colors: [accentColor.opacity(0.50), accentColor.opacity(0.20)],
-                                      startPoint: .topLeading,
-                                      endPoint: .bottomTrailing),
-                        lineWidth: 0.5)
-            } else {
+                    .fill(isActive
+                        ? accentColor.opacity(0.2)
+                        : .white.opacity(0.04))
                 Capsule()
-                    .stroke(.white.opacity(0.08), lineWidth: 0.5)
+                    .strokeBorder(
+                        isActive
+                            ? LinearGradient(colors: [accentColor.opacity(0.4), accentColor.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            : LinearGradient(colors: [.white.opacity(0.06), .clear], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 0.5
+                    )
             }
         }
         .contentShape(Capsule())
@@ -435,41 +446,83 @@ struct TimelineTrack: View {
     let onSeek: (Double) -> Void
     let onSeekEnd: (Double) -> Void
 
+    @State private var isDragging = false
+    @State private var dragProgress: Double = 0
+
+    private var progress: Double {
+        min(isDragging ? dragProgress : (currentTime / max(duration, 1)), 1)
+    }
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Rectangle()
+                // Background track
+                Capsule()
                     .fill(.white.opacity(0.08))
                     .frame(height: 4)
-                    .cornerRadius(2)
 
-                Rectangle()
+                // Filled track
+                Capsule()
                     .fill(accentColor)
-                    .frame(width: geo.size.width * min(CGFloat(currentTime / max(duration, 1)), 1), height: 4)
-                    .cornerRadius(2)
+                    .frame(width: geo.size.width * progress, height: 6)
+                    .shadow(color: accentColor.opacity(0.3), radius: 4, x: 0, y: 0)
 
+                // Thumb
+                Circle()
+                    .fill(.white)
+                    .frame(width: 12, height: 12)
+                    .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
+                    .position(x: geo.size.width * progress, y: 14)
+                    .allowsHitTesting(false)
+
+                // Hit area
                 Rectangle()
                     .fill(.clear)
                     .contentShape(Rectangle())
                     .frame(maxWidth: .infinity)
-                    .frame(height: 16)
+                    .frame(height: 28)
                     .gesture(
-                        DragGesture()
+                        DragGesture(minimumDistance: 0)
                             .onChanged { value in
+                                isDragging = true
                                 let w = max(0, min(CGFloat(value.location.x), geo.size.width))
-                                onSeek((Double(w) / Double(geo.size.width)) * duration)
+                                dragProgress = Double(w / geo.size.width)
+                                onSeek(dragProgress * duration)
                             }
                             .onEnded { value in
+                                isDragging = false
                                 let w = max(0, min(CGFloat(value.location.x), geo.size.width))
                                 onSeekEnd((Double(w) / Double(geo.size.width)) * duration)
                             }
                     )
+
+                // Time tooltip when dragging
+                if isDragging {
+                    let dragTime = dragProgress * duration
+                    Text(formatTime(dragTime))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background {
+                            Capsule()
+                                .fill(.black.opacity(0.7))
+                        }
+                        .position(x: min(max(geo.size.width * progress, 30), geo.size.width - 30), y: -14)
+                }
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 16)
+        .frame(height: 28)
         .accessibilityLabel(NSLocalizedString("Timeline", comment: ""))
         .accessibilityValue("\(Int(currentTime / 60)):\(String(format: "%02d", Int(currentTime.truncatingRemainder(dividingBy: 60)))) de \(Int(duration / 60)):\(String(format: "%02d", Int(duration.truncatingRemainder(dividingBy: 60))))")
+    }
+
+    private func formatTime(_ seconds: Double) -> String {
+        let s = max(0, Int(seconds))
+        let m = s / 60
+        let sec = s % 60
+        return "\(m):\(String(format: "%02d", sec))"
     }
 
     private var accentColor: Color {

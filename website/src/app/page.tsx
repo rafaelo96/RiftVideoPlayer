@@ -42,7 +42,9 @@ export default function Home() {
         <ScrollStory />
 
         <Features />
+        <div className="mx-auto w-[2px] h-16 bg-gradient-to-b from-transparent via-[var(--color-rule)] to-transparent" />
         <Technology />
+        <div className="mx-auto w-[2px] h-16 bg-gradient-to-b from-transparent via-[var(--color-rule)] to-transparent" />
         <Download />
 
         <footer className="site-footer">
