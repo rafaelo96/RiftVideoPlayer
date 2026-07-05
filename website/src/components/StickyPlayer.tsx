@@ -35,7 +35,7 @@ export default function StickyPlayer({ state, isPlaying, onPlayToggle, onPrev, o
   // Animate main text
   useEffect(() => {
     if (!textRef.current) return;
-    gsap.fromTo(
+    const tween = gsap.fromTo(
       textRef.current,
       { opacity: 0, y: 20, filter: "blur(8px)" },
       {
@@ -47,6 +47,10 @@ export default function StickyPlayer({ state, isPlaying, onPlayToggle, onPrev, o
         overwrite: "auto",
       }
     );
+    return () => {
+      tween.kill();
+      gsap.killTweensOf(textRef.current);
+    };
   }, [state.text]);
 
   return (
