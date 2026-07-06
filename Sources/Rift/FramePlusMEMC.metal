@@ -161,7 +161,7 @@ kernel void memcWarp(
         max(length(motion - leftMotion), length(motion - rightMotion)),
         max(length(motion - upMotion), length(motion - downMotion))
     );
-    float vectorConfidence = 1.0 - smoothstep(6.0, 28.0, vectorJump);
+    float vectorConfidence = 1.0 - smoothstep(4.0, 24.0, vectorJump);
     float sourceDelta = distance(originalA.rgb, originalB.rgb);
     float dissolveConfidence = 1.0 - smoothstep(0.32, 0.74, sourceDelta);
     float4 nearestBlend = mix(originalA, originalB, step(0.5, t));
@@ -181,19 +181,16 @@ kernel void memcWarp(
         max(distance(originalB.rgb, frameB.sample(linearSampler, pos + edgeY).rgb),
             distance(originalB.rgb, frameB.sample(linearSampler, pos - edgeY).rgb))
     );
-    float hardEdgeConfidence = 1.0 - smoothstep(0.12, 0.34, max(edgeA, edgeB));
+    float hardEdgeConfidence = 1.0 - smoothstep(0.18, 0.50, max(edgeA, edgeB));
 
-    // FIX: Reduced from 96px to 32px. The old 96px zone suppressed warping across
-    // ~10% of the frame edges, pushing them to crossfade. 32px covers only the
-    // outermost border pixels where motion vectors are least reliable.
     float edgeDistance = min(min(pos.x, float(params.fullWidth) - pos.x), min(pos.y, float(params.fullHeight) - pos.y));
     float edgeConfidence = smoothstep(0.0, 32.0, edgeDistance);
-    float motionAmount = smoothstep(0.75, 6.0, length(motion));
+    float motionAmount = smoothstep(0.50, 4.0, length(motion));
     float stableWarp = confidence * vectorConfidence;
     float motionMix = mix(stableWarp * 0.42, stableWarp, motionAmount);
     float occlusionGuard = max(dissolveConfidence, 0.18);
     float hardEdgeGuard = mix(0.52, 1.0, hardEdgeConfidence);
-    float finalMix = min(0.74, motionMix * edgeConfidence * occlusionGuard * hardEdgeGuard);
+    float finalMix = min(0.85, motionMix * edgeConfidence * occlusionGuard * hardEdgeGuard);
 
     output.write(mix(safeBlend, warped, finalMix), gid);
 }

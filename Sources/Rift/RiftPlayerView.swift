@@ -1513,5 +1513,5 @@ private enum MEMCIntensity {
     var maxMotion: Double { 320 }
     var warpStrength: Double { 1.0 }
     var mix: Double { 0.96 }
-    var occlusionThreshold: Double { 0.36 }
+    var occlusionThreshold: Double { 0.28 }
 }

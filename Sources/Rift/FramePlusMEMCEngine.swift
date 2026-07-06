@@ -130,7 +130,7 @@ final class FramePlusMEMCEngine {
             blockSize: blockSize,
             searchRadius: searchRadius,
             timestep: timestep,
-            occlusionThreshold: 0.40
+            occlusionThreshold: 0.30
         )
     }
 
