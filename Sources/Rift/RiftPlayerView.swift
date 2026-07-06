@@ -11,6 +11,7 @@ struct RiftPlayerView: NSViewRepresentable {
     let interpolationMode: VideoInterpolationPipeline.InterpolationMode
     let sourceFrameRate: Double?
     let visualEnhancementsEnabled: Bool
+    var isHDRContent: Bool = false
     var onStatsChanged: @MainActor (VideoRenderStats) -> Void = { _ in }
 
     func makeNSView(context: Context) -> MetalVideoView {
@@ -22,6 +23,7 @@ struct RiftPlayerView: NSViewRepresentable {
             interpolationMode: interpolationMode,
             sourceFrameRate: sourceFrameRate,
             visualEnhancementsEnabled: visualEnhancementsEnabled,
+            isHDRContent: isHDRContent,
             onStatsChanged: onStatsChanged
         )
         return view
@@ -35,6 +37,7 @@ struct RiftPlayerView: NSViewRepresentable {
             interpolationMode: interpolationMode,
             sourceFrameRate: sourceFrameRate,
             visualEnhancementsEnabled: visualEnhancementsEnabled,
+            isHDRContent: isHDRContent,
             onStatsChanged: onStatsChanged
         )
     }
@@ -55,6 +58,14 @@ struct VideoRenderStats {
 }
 
 final class MetalVideoView: MTKView {
+    var isHDRContent = false {
+        didSet {
+            guard oldValue != isHDRContent else { return }
+            colorPixelFormat = isHDRContent ? .bgra10_xr : .bgra8Unorm
+            (layer as? CAMetalLayer)?.wantsExtendedDynamicRangeContent = isHDRContent
+        }
+    }
+
     init() {
         super.init(frame: .zero, device: MTLCreateSystemDefaultDevice())
 
@@ -62,8 +73,8 @@ final class MetalVideoView: MTKView {
         enableSetNeedsDisplay = true
         isPaused = true
         preferredFramesPerSecond = 60
-        // 10-bit pixel format eliminates banding in dark gradients
-        colorPixelFormat = MTLPixelFormat.bgra10_xr
+        // bgra8Unorm — CI aplica gamma sRGB al renderizar
+        colorPixelFormat = .bgra8Unorm
         clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         layer?.isOpaque = true
         if let metalLayer = layer as? CAMetalLayer {
@@ -71,7 +82,7 @@ final class MetalVideoView: MTKView {
             metalLayer.presentsWithTransaction = false
             metalLayer.allowsNextDrawableTimeout = false
             metalLayer.maximumDrawableCount = 3
-            metalLayer.wantsExtendedDynamicRangeContent = true
+            metalLayer.wantsExtendedDynamicRangeContent = false
         }
     }
 
@@ -98,6 +109,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
     private var fpsMode: FPSMode = .native
     private var interpolationMode: VideoInterpolationPipeline.InterpolationMode = .disabled
     private var visualEnhancementsEnabled = false
+    private var isHDRContent = false
     private var sourceFrameRate: Double?
     private var videoOutput: AVPlayerItemVideoOutput?
     private var commandQueue: MTLCommandQueue?
@@ -256,6 +268,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         interpolationMode: VideoInterpolationPipeline.InterpolationMode,
         sourceFrameRate: Double?,
         visualEnhancementsEnabled: Bool,
+        isHDRContent: Bool = false,
         onStatsChanged: @escaping @MainActor (VideoRenderStats) -> Void
     ) {
         if self.player !== player {
@@ -280,8 +293,10 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         self.fpsMode = fpsMode
         self.interpolationMode = interpolationMode
         self.visualEnhancementsEnabled = visualEnhancementsEnabled
+        self.isHDRContent = isHDRContent
         self.sourceFrameRate = sourceFrameRate
         self.statsHandler = onStatsChanged
+        view.isHDRContent = isHDRContent
 
         view.preferredFramesPerSecond = preferredRenderFPS(
             fpsMode: fpsMode,
@@ -524,8 +539,9 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         let fittedImage = frame.needsDetailBoost
             ? detailBoosted(aspectFit(displayImage, in: view.drawableSize))
             : aspectFit(displayImage, in: view.drawableSize)
+        let dithered = applyDithering(fittedImage)
         ciContext.render(
-            fittedImage,
+            dithered,
             to: drawable.texture,
             commandBuffer: commandBuffer,
             bounds: CGRect(origin: .zero, size: view.drawableSize),
@@ -661,8 +677,9 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         ))
 
         let fitted = aspectFit(displayImage, in: view.drawableSize)
+        let dithered = applyDithering(fitted)
         ciContext.render(
-            fitted,
+            dithered,
             to: drawable.texture,
             commandBuffer: commandBuffer,
             bounds: CGRect(origin: .zero, size: view.drawableSize),
@@ -1394,6 +1411,10 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
 
     private func applyVisualEnhancements(_ image: CIImage) -> CIImage {
         PlayerState.applyVisualEnhancements(to: image)
+    }
+
+    private func applyDithering(_ image: CIImage) -> CIImage {
+        image
     }
 
     private func ciImage(from pixelBuffer: CVPixelBuffer, fallbackSource: CVPixelBuffer? = nil) -> CIImage {

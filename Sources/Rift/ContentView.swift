@@ -69,7 +69,8 @@ struct ContentView: View {
                             fpsMode: state.fpsMode,
                             interpolationMode: state.interpolationMode,
                             sourceFrameRate: state.sourceFrameRate,
-                            visualEnhancementsEnabled: state.visualEnhancementsEnabled
+                            visualEnhancementsEnabled: state.visualEnhancementsEnabled,
+                            isHDRContent: state.isHDRContent
                         ) { stats in
                             state.currentRenderingFPS = stats.renderingFPS
                             state.isArtificialInterpolationActive = stats.isArtificialInterpolationActive
