@@ -68,7 +68,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        Self.setApplicationIcon()
         Self.bringPlayerWindowToFront()
         Self.createFallbackWindowIfNeeded()
     }
@@ -92,14 +91,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static func enqueueOpenURLs(_ urls: [URL]) {
         pendingOpenURLs.append(contentsOf: urls)
         NotificationCenter.default.post(name: .riftOpenURLs, object: nil, userInfo: ["urls": urls])
-    }
-
-    @MainActor
-    static func setApplicationIcon() {
-        if let url = Bundle.main.url(forResource: "icon", withExtension: "png"),
-           let image = NSImage(contentsOf: url) {
-            NSApp.applicationIconImage = image
-        }
     }
 
     @MainActor

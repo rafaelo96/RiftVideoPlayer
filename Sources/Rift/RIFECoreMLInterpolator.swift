@@ -42,10 +42,6 @@ final class RIFECoreMLInterpolator {
         state = .unavailable
     }
 
-    init() async throws {
-        try await loadEngine()
-    }
-
     func loadEngine() async throws {
         guard let modelURL = Self.findBundledModelURL() else {
             state = .unavailable

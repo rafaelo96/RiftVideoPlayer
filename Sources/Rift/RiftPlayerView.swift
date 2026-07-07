@@ -8,7 +8,7 @@ import SwiftUI
 struct RiftPlayerView: NSViewRepresentable {
     let player: AVPlayer
     let fpsMode: FPSMode
-    let interpolationMode: VideoInterpolationPipeline.InterpolationMode
+    let interpolationMode: InterpolationMode
     let sourceFrameRate: Double?
     let visualEnhancementsEnabled: Bool
     var isHDRContent: Bool = false
@@ -107,7 +107,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
     private weak var player: AVPlayer?
     private weak var attachedItem: AVPlayerItem?
     private var fpsMode: FPSMode = .native
-    private var interpolationMode: VideoInterpolationPipeline.InterpolationMode = .disabled
+    private var interpolationMode: InterpolationMode = .disabled
     private var visualEnhancementsEnabled = false
     private var isHDRContent = false
     private var sourceFrameRate: Double?
@@ -265,7 +265,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         view: MetalVideoView,
         player: AVPlayer,
         fpsMode: FPSMode,
-        interpolationMode: VideoInterpolationPipeline.InterpolationMode,
+        interpolationMode: InterpolationMode,
         sourceFrameRate: Double?,
         visualEnhancementsEnabled: Bool,
         isHDRContent: Bool = false,
@@ -343,7 +343,7 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
 
     private func preferredRenderFPS(
         fpsMode: FPSMode,
-        interpolationMode: VideoInterpolationPipeline.InterpolationMode,
+        interpolationMode: InterpolationMode,
         sourceFrameRate: Double?
     ) -> Int {
         guard fpsMode == .flux else {
@@ -552,144 +552,6 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
     }
 
     // ════════════════════════════════════════════════════════════════
-    // FRAME+ — Pipeline corregido
-    //
-    // FIXES aplicados:
-    //   Bug 2 → El prefetcher ahora avanza lookahead de 100ms; los
-    //           timestamps de cada frame son respetados para sincronía.
-    //   Bug 3 → Cadencia corregida: el pulso de interpolación usa
-    //           peek() — NO consume el siguiente frame fuente.
-    //           Solo el pulso de fuente hace dequeue().
-    //           Esto garantiza que mostramos exactamente:
-    //               pulso impar  → frame fuente real
-    //               pulso par    → frame interpolado entre [held, next]
-    //           sin avanzar el video el doble de rápido.
-    //   Bug 4 → Doble buffer de salida Metal (A/B) para que el
-    //           comando GPU del pulso N no pise la textura que
-    //           el pulso N-1 todavía puede estar leyendo.
-    // ════════════════════════════════════════════════════════════════
-    private func drawFramePlus(
-        output: AVPlayerItemVideoOutput,
-        itemTime: CMTime,
-        drawable: CAMetalDrawable,
-        commandBuffer: MTLCommandBuffer,
-        ciContext: CIContext,
-        view: MTKView
-    ) {
-        // Pacing GPU: máximo 3 comandos en vuelo
-        let sema = framePlusInFlightSemaphore
-        if sema.wait(timeout: .now() + 0.002) != .success {
-            renderBlack(to: drawable, commandBuffer: commandBuffer, ciContext: ciContext, size: view.drawableSize)
-            return
-        }
-        commandBuffer.addCompletedHandler { _ in sema.signal() }
-
-        // ─── PRIMING: esperar mínimo 2 frames en buffer ───────────
-        if framePlusHeldFrame == nil {
-            if frameBuffer.availableCount < 2 {
-                renderBlack(to: drawable, commandBuffer: commandBuffer, ciContext: ciContext, size: view.drawableSize)
-                return
-            }
-            guard let first = frameBuffer.dequeue() else {
-                commandBuffer.present(drawable)
-                commandBuffer.commit()
-                return
-            }
-            framePlusHeldFrame = first.pixelBuffer
-            framePlusHeldTime = first.time
-        }
-
-        guard let currentBuffer = framePlusHeldFrame else {
-            commandBuffer.present(drawable)
-            commandBuffer.commit()
-            return
-        }
-
-        // ─── CADENCIA CORREGIDA ───────────────────────────────────
-        // Incrementamos el pulso ANTES de decidir qué hacer.
-        framePlusDisplayPulse &+= 1
-        let isInterpolationPulse = framePlusDisplayPulse.isMultiple(of: 2)
-
-        let renderedImage: CIImage
-        var isInterpolated = false
-
-        if isInterpolationPulse {
-            // Pulso par → generar frame intermedio entre held y el siguiente
-            // PEEK sin consumir — el frame fuente avanza solo en pulso impar
-            if let nextFrame = frameBuffer.peek() {
-                let interpolated = interpolateFrameMetal(
-                    current: currentBuffer,
-                    currentTime: framePlusHeldTime,
-                    next: nextFrame.pixelBuffer,
-                    nextTime: nextFrame.time,
-                    timestep: 0.5,
-                    commandBuffer: commandBuffer
-                )
-                if let interpolated {
-                    renderedImage = interpolated
-                    isInterpolated = true
-                    framePlusInterpolatedCount += 1
-                } else {
-                    // Fallback: dissolve suave entre los dos frames disponibles
-                    let alpha = 0.5 as Float
-                    let blended = fastBlendKernel?.apply(
-                        extent: ciImage(from: nextFrame.pixelBuffer).extent,
-                        roiCallback: { _, rect in rect },
-                        arguments: [
-                            ciImage(from: currentBuffer),
-                            ciImage(from: nextFrame.pixelBuffer),
-                            alpha
-                        ]
-                    )
-                    renderedImage = blended ?? ciImage(from: currentBuffer)
-                    isInterpolated = blended != nil
-                    framePlusFallbackCount += 1
-                }
-            } else {
-                // Sin siguiente frame disponible aún: repetir held
-                renderedImage = ciImage(from: currentBuffer)
-                framePlusFallbackCount += 1
-            }
-        } else {
-            // Pulso impar → presentar frame fuente real y avanzar al siguiente
-            // Solo aquí hacemos dequeue()
-            if let nextFrame = frameBuffer.dequeue() {
-                framePlusHeldFrame = nextFrame.pixelBuffer
-                framePlusHeldTime = nextFrame.time
-                renderedImage = ciImage(from: nextFrame.pixelBuffer)
-            } else {
-                // Buffer vacío — repetir el held actual
-                renderedImage = ciImage(from: currentBuffer)
-            }
-            framePlusUniqueFrameCount += 1
-        }
-
-        // ─── VISUAL ENHANCEMENTS ──────────────────────────────────
-        let displayImage = visualEnhancementsEnabled
-            ? applyVisualEnhancements(renderedImage)
-            : renderedImage
-
-        recordRenderedFrame(InterpolatedImage(
-            image: displayImage,
-            isInterpolated: isInterpolated,
-            needsDetailBoost: false,
-            usedOpticalFlow: isInterpolated
-        ))
-
-        let fitted = aspectFit(displayImage, in: view.drawableSize)
-        let dithered = applyDithering(fitted)
-        ciContext.render(
-            dithered,
-            to: drawable.texture,
-            commandBuffer: commandBuffer,
-            bounds: CGRect(origin: .zero, size: view.drawableSize),
-            colorSpace: renderColorSpace
-        )
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
-    }
-
-    // ════════════════════════════════════════════════════════════════
     // interpolateFrameMetal — FIX Bug 4: doble buffer A/B
     //
     // El shader Metal escribe al buffer que NO se está mostrando.
@@ -825,30 +687,6 @@ final class MetalVideoRenderer: NSObject, MTKViewDelegate {
         framePlusInterpolatedCount = 0
         framePlusFallbackCount = 0
         framePlusStatsStart = CACurrentMediaTime()
-    }
-
-    private func copyFrame(from output: AVPlayerItemVideoOutput, itemTime: CMTime) -> SourceVideoFrame? {
-        guard output.hasNewPixelBuffer(forItemTime: itemTime) else { return nil }
-        var displayTime = CMTime.invalid
-        guard let pixelBuffer = output.copyPixelBuffer(forItemTime: itemTime, itemTimeForDisplay: &displayTime) else {
-            return nil
-        }
-        let time = normalizedSourceFrameTime(displayTime.isValid ? displayTime : itemTime)
-        return SourceVideoFrame(pixelBuffer: pixelBuffer, time: time)
-    }
-
-    private func makeTexture(from pixelBuffer: CVPixelBuffer) -> MTLTexture? {
-        guard let textureCache else { return nil }
-        let width = CVPixelBufferGetWidth(pixelBuffer)
-        let height = CVPixelBufferGetHeight(pixelBuffer)
-        guard width > 0, height > 0 else { return nil }
-        var cvTexture: CVMetalTexture?
-        let result = CVMetalTextureCacheCreateTextureFromImage(
-            kCFAllocatorDefault, textureCache, pixelBuffer, nil,
-            .bgra8Unorm, width, height, 0, &cvTexture
-        )
-        guard result == kCVReturnSuccess, let cvTexture else { return nil }
-        return CVMetalTextureGetTexture(cvTexture)
     }
 
     private func attachOutputIfNeeded(to item: AVPlayerItem?) {
