@@ -18,9 +18,11 @@ BUILD_DIR=".build"
 PRODUCT="Rift"
 APP_BUNDLE="$PRODUCT.app"
 DMG_PATH="$PRODUCT.dmg"
-VERSION=$(grep -m1 'MARKETING_VERSION' Rift.xcodeproj 2>/dev/null || echo "1.0")
+GIT_COUNT=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+GIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+VERSION="1.0.0-dev.$GIT_COUNT"
 
-echo "=== Building $PRODUCT v$VERSION ($CONFIG) ==="
+echo "=== Building $PRODUCT v$VERSION+$GIT_HASH ($CONFIG) ==="
 
 # 1. Build
 echo "--- Building ---"
@@ -34,7 +36,10 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$BUILD_DIR/$CONFIG/$PRODUCT" "$APP_BUNDLE/Contents/MacOS/"
 cp -R Sources/Rift/Resources/* "$APP_BUNDLE/Contents/Resources/" 2>/dev/null || true
+cp -R "$BUILD_DIR/$CONFIG/${PRODUCT}_Rift.bundle" "$APP_BUNDLE/Contents/Resources/" 2>/dev/null || echo "Warning: ${PRODUCT}_Rift.bundle not found"
 cp Sources/Rift/Info.plist "$APP_BUNDLE/Contents/"
+plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP_BUNDLE/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "$GIT_COUNT" "$APP_BUNDLE/Contents/Info.plist"
 
 # 3. Sign (requires Apple Developer Program)
 if [ "${SKIP_SIGN:-false}" != "true" ]; then
@@ -67,4 +72,4 @@ if [ "${SKIP_NOTARIZE:-false}" != "true" ]; then
     xcrun stapler staple "$DMG_PATH"
 fi
 
-echo "=== Done: $DMG_PATH ==="
+echo "=== Done: $PRODUCT v$VERSION+$GIT_HASH ==="
