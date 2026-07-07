@@ -46,7 +46,7 @@ struct RiftApp: App {
                             .applicationVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0",
                             .version: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1",
                             .credits: NSAttributedString(
-                                string: "A native video player with Frame⁺ AI interpolation, HDR support, and Metal-accelerated rendering.",
+                                string: "A native video player with Frame⁺ AI interpolation, HDR support, and Metal-accelerated rendering.\nBuild: \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")+\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?")",
                                 attributes: [
                                     .font: NSFont.systemFont(ofSize: 11),
                                     .foregroundColor: NSColor.secondaryLabelColor
