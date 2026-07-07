@@ -57,8 +57,46 @@ fi
 # 4. Create DMG
 echo "--- Creating DMG ---"
 mkdir -p "$(dirname "$APP_BUNDLE")"
-hdiutil create -volname "$PRODUCT" -srcfolder "$APP_BUNDLE" \
-    -ov -format UDZO "$DMG_PATH"
+BG_PNG="scripts/dmg-background.png"
+if [ -f "$BG_PNG" ]; then
+    python3 -c "
+import dmgbuild, plistlib, os
+bg = os.path.abspath('$BG_PNG')
+settings = {
+    'filename': '$DMG_PATH',
+    'volume_name': '$PRODUCT',
+    'format': 'UDZO',
+    'compression_level': 9,
+    'size': None,
+    'files': ['$APP_BUNDLE'],
+    'symlinks': {'Applications': '/Applications'},
+    'icon': '$APP_BUNDLE/Contents/Resources/Rift.icns',
+    'background': bg,
+    'icon_size': 96,
+    'icon_locations': {'$APP_BUNDLE': (160, 210), 'Applications': (560, 210)},
+    'window_rect': ((100, 80), (720, 420)),
+    'text_size': 12,
+    'exclude': ['.DS_Store', '.fseventsd'],
+    'badge_icon': None,
+    'show_status_bar': False,
+    'show_toolbar': False,
+    'show_pathbar': False,
+    'show_sidebar': False,
+    'show_icon_preview': True,
+    'show_item_info': False,
+    'arrange_by': None,
+    'grid_offset': (0, 0),
+    'grid_spacing': 100,
+    'scroll_position': (0, 0),
+    'background_color': None,
+}
+dmgbuild.build_dmg(filename=settings['filename'], volume_name=settings['volume_name'], settings=settings)
+print('DMG created with dmgbuild')
+" || { echo "dmgbuild failed, falling back to hdiutil"; hdiutil create -ov -format UDZO -volname "$PRODUCT" -srcfolder "$APP_BUNDLE" "$DMG_PATH"; }
+else
+    echo "No background image found, using hdiutil"
+    hdiutil create -ov -format UDZO -volname "$PRODUCT" -srcfolder "$APP_BUNDLE" "$DMG_PATH"
+fi
 
 # 5. Notarize (requires Apple Developer Program)
 if [ "${SKIP_NOTARIZE:-false}" != "true" ]; then
