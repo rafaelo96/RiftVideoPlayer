@@ -27,34 +27,6 @@ struct GlassBackground: View {
     }
 }
 
-// MARK: - Glass Capsule
-
-struct GlassCapsule: View {
-    var body: some View {
-        ZStack {
-            NativeVisualEffectView(
-                material: .hudWindow,
-                blendingMode: .withinWindow
-            )
-            .clipShape(Capsule())
-
-            Capsule()
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            .white.opacity(0.10),
-                            .white.opacity(0.03),
-                            Color(red: 0.30, green: 0.55, blue: 1.0).opacity(0.03)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 0.5
-                )
-        }
-    }
-}
-
 // MARK: - Liquid Glass Panel
 
 struct LiquidGlassPanel<Content: View>: View {

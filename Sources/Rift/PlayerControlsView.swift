@@ -5,8 +5,6 @@ struct PlayerControlsView: View {
 
     @State private var isDraggingSlider = false
     @State private var dragSliderValue: Double = 0
-    @State private var isSeekingPreview = false
-    @State private var previewTime: Double = 0
     @State private var showAudioMenu = false
     @State private var showSubsMenu = false
 
@@ -82,14 +80,7 @@ struct PlayerControlsView: View {
 
             optionDivider
 
-            fpsReadout
-
-            // Seek preview indicator
-            if isSeekingPreview {
-                seekPreview
-                    .frame(width: 80)
-            }
-        }
+            fpsReadout        }
         .frame(minWidth: 210, alignment: .leading)
     }
 
@@ -342,19 +333,6 @@ struct PlayerControlsView: View {
     }
 
     // MARK: - Timeline with Chapter Support
-
-    private var seekPreview: some View {
-        VStack(spacing: 4) {
-            Text("00:45")
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.88))
-
-            Rectangle()
-                .fill(accentColor.opacity(0.4))
-                .frame(width: 60, height: 3)
-                .cornerRadius(1.5)
-        }
-    }
 
     // MARK: - Glass Pill
 

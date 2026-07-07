@@ -50,7 +50,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     @Published var audioTracks: [AudioTrack] = []
     @Published var selectedAudioTrackIndex: Int = 0
     @Published var url: URL?
-    @Published var interpolationMode: VideoInterpolationPipeline.InterpolationMode = .disabled {
+    @Published var interpolationMode: InterpolationMode = .disabled {
         didSet { UserDefaults.standard.set(interpolationMode.rawValue, forKey: SettingsKey.interpolationMode) }
     }
     @Published var isFramePlusPreparing = false
@@ -144,7 +144,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             .flatMap { FPSMode(rawValue: $0) } ?? .native
         fpsMode = loadedFPSMode
         let loadedInterpolation = UserDefaults.standard.string(forKey: SettingsKey.interpolationMode)
-            .flatMap { VideoInterpolationPipeline.InterpolationMode(rawValue: $0) } ?? .disabled
+            .flatMap { InterpolationMode(rawValue: $0) } ?? .disabled
         interpolationMode = loadedInterpolation
         visualEnhancementsEnabled = UserDefaults.standard.bool(forKey: SettingsKey.visualEnhancements)
 
@@ -312,7 +312,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
     }
 
-    func setInterpolationMode(_ mode: VideoInterpolationPipeline.InterpolationMode) {
+    func setInterpolationMode(_ mode: InterpolationMode) {
         if playbackBackend == .directFFmpeg {
             if mode == .disabled {
                 interpolationMode = .disabled
