@@ -1,6 +1,6 @@
 "use client";
 
-const stars = Array.from({ length: 30 }, (_, i) => ({
+const stars = Array.from({ length: 15 }, (_, i) => ({
   left: `${(i * 37 + 11) % 100}%`,
   top: `${(i * 53 + 17) % 100}%`,
   opacity: 0.3 + ((i * 7) % 5) * 0.1,

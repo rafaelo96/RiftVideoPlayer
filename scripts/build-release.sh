@@ -64,10 +64,10 @@ if [ -f "scripts/dmg-background.png" ]; then
         --volicon "$APP_BUNDLE/Contents/Resources/Rift.icns" \
         --background "scripts/dmg-background.png" \
         --window-pos 100 80 \
-        --window-size 720 420 \
+        --window-size 821 479 \
         --icon-size 96 \
-        --icon "$PRODUCT.app" 160 210 \
-        --app-drop-link 560 210 \
+        --icon "$PRODUCT.app" 182 286 \
+        --app-drop-link 643 286 \
         --hide-extension "$PRODUCT.app" \
         --no-internet-enable \
         --format UDZO \

@@ -1,5 +1,7 @@
 "use client";
 
+import FeatureCard from "@/components/FeatureCard";
+
 const features = [
   {
     icon: (
@@ -92,15 +94,7 @@ export default function Features() {
 
         {/* Hero feature — full width, larger treatment */}
         <div className="bordered bordered-b" style={{ borderColor: "var(--color-rule)", marginBlockEnd: "1px" }}>
-          <div className="ay-card ay-card--dark" style={{ padding: "clamp(1.5rem, 3vw, 2.5rem)", display: "flex", flexDirection: "row", alignItems: "center", gap: "clamp(1.5rem, 4vw, 3rem)" }}>
-            <div className="ay-icon" style={{ margin: 0, flexShrink: 0, width: "2.5rem", height: "2.5rem", color: "var(--color-accent)" }}>
-              {features[0].icon}
-            </div>
-            <div>
-              <h3 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", fontWeight: 600, lineHeight: 1.15, marginBlockEnd: "var(--space-sm)", color: "var(--color-ink)" }}>{features[0].title}</h3>
-              <p style={{ color: "var(--color-ink-soft)", lineHeight: 1.6, maxWidth: "42rem" }}>{features[0].desc}</p>
-            </div>
-          </div>
+          <FeatureCard {...features[0]} variant="hero" />
         </div>
 
         {/* Staggered grid — first row: 2 cols, second row: 3 cols for variety */}
@@ -108,19 +102,11 @@ export default function Features() {
           {features.slice(1, 3).map((f, i) => (
             <div
               key={f.title}
-              className="bordered"
               style={{
-                borderColor: "var(--color-rule)",
-                padding: "clamp(1.5rem, 3vw, 2.5rem)",
                 borderRight: i === 0 ? "1px solid var(--color-rule)" : "none",
-                borderBottom: 0,
               }}
             >
-              <div className="ay-icon" style={{ margin: "0 0 var(--space-md)" }}>
-                {f.icon}
-              </div>
-              <h3>{f.title}</h3>
-              <p>{f.desc}</p>
+              <FeatureCard {...f} />
             </div>
           ))}
         </div>
@@ -129,18 +115,11 @@ export default function Features() {
           {features.slice(3).map((f, i) => (
             <div
               key={f.title}
-              className="bordered"
               style={{
-                borderColor: "var(--color-rule)",
-                padding: "clamp(1.5rem, 3vw, 2.5rem)",
                 borderRight: i < 2 ? "1px solid var(--color-rule)" : "none",
               }}
             >
-              <div className="ay-icon" style={{ margin: "0 0 var(--space-md)" }}>
-                {f.icon}
-              </div>
-              <h3>{f.title}</h3>
-              <p>{f.desc}</p>
+              <FeatureCard {...f} />
             </div>
           ))}
         </div>
