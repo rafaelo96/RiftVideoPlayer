@@ -101,26 +101,26 @@ export default function StickyPlayer({ state, isPlaying, onPlayToggle, onPrev, o
               }`}
             />
 
-            <LogoScene isActive={state.scene === 5 || state.scene === 6} />
+            <LogoScene isActive={state.scene === 6} />
           </div>
 
           {/* Story text — never scaled */}
           {state.text && (
             <div
               ref={textRef}
-              className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none px-6"
+              className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none px-4 sm:px-6"
             >
-              <div className="max-w-[34rem] text-center">
-                <div className="font-mono text-[10px] sm:text-xs font-bold tracking-[0.16em] uppercase text-[var(--color-accent)] mb-3">
+              <div className="w-full max-w-[28rem] text-center">
+                <div className="font-mono text-[9px] sm:text-[11px] font-bold tracking-[0.16em] uppercase text-[var(--color-accent)] mb-2 sm:mb-3">
                   {state.eyebrow}
                 </div>
                 <h3
-                  className="font-display text-[clamp(24px,4vw,50px)] font-[800] tracking-[-0.04em] text-center leading-[1.02] text-[var(--color-ink)]"
-                  style={{ textShadow: "0 18px 44px oklch(5% 0.02 252 / 0.74)" }}
+                  className="font-display text-[clamp(17px,2.6vw,32px)] font-[800] tracking-[-0.03em] text-center leading-[1.1] text-[var(--color-ink)]"
+                  style={{ textShadow: "0 12px 32px oklch(5% 0.02 252 / 0.7)" }}
                 >
                   {state.text}
                 </h3>
-                <p className="mt-3 text-xs sm:text-sm text-[var(--color-ink-soft)] leading-relaxed">
+                <p className="mt-2 sm:mt-3 text-[10px] sm:text-sm text-[var(--color-ink-soft)] leading-relaxed">
                   {state.description}
                 </p>
               </div>

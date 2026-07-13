@@ -37,7 +37,7 @@ const specs = [
 
 export default function Technology() {
   return (
-    <section id="technology" className="ay-section">
+    <section id="technology" className="ay-section ay-section--dark">
       <div className="ay-inner">
         <div
           style={{
@@ -49,19 +49,19 @@ export default function Technology() {
           }}
         >
           <div>
-            <div className="ay-label">Pipeline</div>
-            <h2 className="ay-heading" style={{ marginTop: "var(--space-md)" }}>
+            <div className="ay-label ay-label--dark">Pipeline</div>
+            <h2 className="ay-heading ay-heading--dark" style={{ marginTop: "var(--space-md)" }}>
               A player with a real pipeline.
             </h2>
           </div>
-          <p className="ay-sub">
+          <p className="ay-sub ay-sub--dark">
             Every component is chosen for performance: Metal rendering, RIFE
             neural interpolation, and HDR tone mapping that preserves the
             director&rsquo;s intent.
           </p>
         </div>
 
-        <div className="spec-wrap">
+        <div className="spec-wrap spec-wrap--dark">
           <table className="spec-table">
             <thead>
               <tr>
