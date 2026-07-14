@@ -3,6 +3,8 @@ import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ClientLayout from "@/components/ClientLayout";
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 const body = Geist({
   subsets: ["latin"],
   display: "swap",
@@ -26,9 +28,9 @@ export const metadata: Metadata = {
   description:
     "Rift transforms your Mac into a high-end cinema display. Frame-perfect video, real-time AI motion interpolation, and a liquid glass interface.",
   icons: {
-    icon: "/icon.svg",
+    icon: `${basePath}/icon.svg`,
   },
-  manifest: "/manifest.json",
+  manifest: `${basePath}/manifest.json`,
   other: {
     "theme-color": "#0f0f1a",
   },
