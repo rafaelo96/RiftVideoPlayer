@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import StickyPlayer, { type StoryState } from "./StickyPlayer";
+import { GITHUB_URL, GITHUB_LATEST_URL } from "@/lib/config";
 
 const STEPS = [
   {
@@ -193,11 +194,11 @@ export default function ScrollStory() {
               <p className="hero-lede">{currentStep.heroDesc}</p>
             )}
             <div className="hero-actions">
-              <a href="https://github.com/anomalyco/VideoPlayerUI/releases/latest" target="_blank" rel="noopener noreferrer" className="hero-cta hero-cta--primary">
+              <a href={GITHUB_LATEST_URL} target="_blank" rel="noopener noreferrer" className="hero-cta hero-cta--primary">
                 Download for macOS
               </a>
               <a
-                href="https://github.com/anomalyco/VideoPlayerUI"
+                href={GITHUB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hero-cta hero-cta--secondary"
@@ -208,7 +209,7 @@ export default function ScrollStory() {
                 View source
               </a>
               <a
-                href="https://github.com/anomalyco/VideoPlayerUI"
+                href={GITHUB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="github-stars-badge"

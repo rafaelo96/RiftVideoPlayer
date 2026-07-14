@@ -4,6 +4,7 @@ import "./globals.css";
 import ClientLayout from "@/components/ClientLayout";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+const githubUrl = `https://github.com/${process.env.NEXT_PUBLIC_GITHUB_REPO || "anomalyco/VideoPlayerUI"}`;
 
 const body = Geist({
   subsets: ["latin"],
@@ -66,7 +67,7 @@ const jsonLd = {
   author: {
     "@type": "Organization",
     name: "Rift",
-    url: "https://github.com/anomalyco/VideoPlayerUI",
+    url: githubUrl,
   },
 };
 

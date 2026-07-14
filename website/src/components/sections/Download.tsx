@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { GITHUB_URL, GITHUB_LATEST_URL, GITHUB_API_LATEST } from "@/lib/config";
 
 interface ReleaseInfo {
   version: string;
@@ -12,7 +13,7 @@ export default function Download() {
   const [release, setRelease] = useState<ReleaseInfo | null>(null);
 
   useEffect(() => {
-    fetch("https://api.github.com/repos/anomalyco/VideoPlayerUI/releases/latest")
+    fetch(GITHUB_API_LATEST)
       .then((r) => r.json())
       .then((data) => {
         if (data.tag_name) {
@@ -59,7 +60,7 @@ export default function Download() {
 
         <div className="ay-download-grid" style={{ borderColor: "var(--color-rule)" }}>
           <a
-            href="https://github.com/anomalyco/VideoPlayerUI/releases/latest"
+            href={GITHUB_LATEST_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="ay-download-card"
@@ -82,7 +83,7 @@ export default function Download() {
           </a>
 
           <a
-            href="https://github.com/anomalyco/VideoPlayerUI"
+            href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="ay-download-card"
