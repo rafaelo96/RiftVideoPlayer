@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useLenis } from "lenis/react";
+import { GITHUB_LATEST_URL } from "@/lib/config";
 
 const links = [
   ["Features", "#features"],
@@ -114,7 +115,7 @@ export default function Navbar() {
         </button>
 
         <a
-          href="https://github.com/anomalyco/VideoPlayerUI/releases/latest"
+          href={GITHUB_LATEST_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="nav-cta"

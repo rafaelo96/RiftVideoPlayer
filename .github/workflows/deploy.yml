@@ -31,6 +31,7 @@ jobs:
       - run: npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+          NEXT_PUBLIC_GITHUB_REPO: ${{ github.repository }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website/out
