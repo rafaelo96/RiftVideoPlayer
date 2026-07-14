@@ -30,7 +30,7 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
           NEXT_PUBLIC_GITHUB_REPO: ${{ github.repository }}
-          NEXT_PUBLIC_DOWNLOAD_REPO: anomalyco/VideoPlayerUI
+          NEXT_PUBLIC_DOWNLOAD_REPO: ${{ github.repository }}
       - uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
