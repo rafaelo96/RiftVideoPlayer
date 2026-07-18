@@ -847,8 +847,6 @@ a {
 
 .ay-download-extras .ay-download-card {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  transition: background-color var(--dur-short) var(--ease-out);
 }
 
 .ay-section--dark .ay-download-extras .ay-download-card {
@@ -863,8 +861,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
+  background: var(--color-paper-2);
+  border-radius: 0;
   padding: var(--space-sm) var(--space-md);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -880,7 +878,7 @@ a {
 }
 
 .ay-code-block__action {
-  color: var(--color-ink-soft);
+  color: var(--color-muted);
   font-size: var(--text-xs);
   margin-inline-start: var(--space-sm);
   white-space: nowrap;
