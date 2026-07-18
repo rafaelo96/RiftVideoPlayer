@@ -115,7 +115,7 @@ struct PlayerControlsView: View {
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(String(format: "%.0f", state.displayRenderingFPS)) FPS")
+                Text(String(format: NSLocalizedString("%.0f FPS", comment: ""), state.displayRenderingFPS))
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .lineLimit(1)
 
@@ -248,7 +248,7 @@ struct PlayerControlsView: View {
             }
         } label: {
             glassPill(
-                title: "Visual",
+                title: NSLocalizedString("Visual", comment: ""),
                 systemName: "sparkle.magnifyingglass",
                 isActive: state.visualEnhancementsEnabled,
                 hint: NSLocalizedString("Visual Enhancements", comment: "")
@@ -263,7 +263,7 @@ struct PlayerControlsView: View {
             showAudioMenu = true
         } label: {
             glassPill(
-                title: "Audio",
+                title: NSLocalizedString("Audio", comment: ""),
                 systemName: "music.note.list",
                 isActive: state.selectedAudioTrackIndex != 0,
                 hint: NSLocalizedString("Audio Track", comment: "")
@@ -296,7 +296,7 @@ struct PlayerControlsView: View {
             showSubsMenu = true
         } label: {
             glassPill(
-                title: "Subs",
+                title: NSLocalizedString("Subs", comment: ""),
                 systemName: "captions.bubble",
                 isActive: state.selectedSubtitleTrack != nil,
                 hint: NSLocalizedString("Subtitles", comment: "")
@@ -401,7 +401,7 @@ struct PlayerControlsView: View {
 
     private var speedTitle: String {
         let value = Double(state.playbackRate)
-        return value == 1 ? "1x" : String(format: "%.2gx", value)
+        return value == 1 ? NSLocalizedString("1x", comment: "") : String(format: NSLocalizedString("%.2gx", comment: ""), value)
     }
 
     private var motionTitle: String {
@@ -493,7 +493,7 @@ struct TimelineTrack: View {
         .frame(maxWidth: .infinity)
         .frame(height: 28)
         .accessibilityLabel(NSLocalizedString("Timeline", comment: ""))
-        .accessibilityValue("\(Int(currentTime / 60)):\(String(format: "%02d", Int(currentTime.truncatingRemainder(dividingBy: 60)))) de \(Int(duration / 60)):\(String(format: "%02d", Int(duration.truncatingRemainder(dividingBy: 60))))")
+        .accessibilityValue(String(format: NSLocalizedString("%d:%02d of %d:%02d", comment: ""), Int(currentTime / 60), Int(currentTime.truncatingRemainder(dividingBy: 60)), Int(duration / 60), Int(duration.truncatingRemainder(dividingBy: 60))))
     }
 
     private func formatTime(_ seconds: Double) -> String {

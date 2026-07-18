@@ -39,3 +39,44 @@
 "Opening cache..." = "Opening cache...";
 "Could not load converted video" = "Could not load converted video.";
 "Could not open video" = "Could not open video.";
+
+"Rift" = "Rift";
+"File" = "File";
+"Open File..." = "Open File...";
+"About Rift" = "About Rift";
+"Rift Credits" = "A native video player with Frame⁺ AI interpolation, HDR support, and Metal-accelerated rendering.\nBuild: %@+%@";
+
+"FPS" = "FPS";
+"%.0f FPS" = "%.0f FPS";
+"Visual" = "Visual";
+"Language" = "Language";
+"Restart required" = "Restart required";
+"The language change will take effect after restarting Rift." = "The language change will take effect after restarting Rift.";
+"Restart Now" = "Restart Now";
+"Later" = "Later";
+"Audio" = "Audio";
+"Subs" = "Subs";
+"Subtitle" = "Subtitle";
+
+"Player is active" = "Player is active";
+"Opening MKV direct..." = "Opening MKV direct...";
+"Switching to compatible mode..." = "Switching to compatible mode...";
+"Converting video (hardware)..." = "Converting video (hardware)...";
+"Converting video (compatible)..." = "Converting video (compatible)...";
+"Retrying compatible conversion..." = "Retrying compatible conversion...";
+"Frame⁺ HQ needs ffmpeg; using live Frame⁺." = "Frame⁺ HQ needs ffmpeg; using live Frame⁺.";
+"Frame⁺ preparing 60fps..." = "Frame⁺ preparing 60fps...";
+"Frame⁺ HQ could not prepare 60fps; using live Frame⁺." = "Frame⁺ HQ could not prepare 60fps; using live Frame⁺.";
+"Preparation stopped; you can reopen the file to retry." = "Preparation stopped; you can reopen the file to retry.";
+"Loading..." = "Loading...";
+"Could not open MKV." = "Could not open MKV.";
+
+"%d:%02d of %d:%02d" = "%d:%02d of %d:%02d";
+"%@... %d s" = "%@... %d s";
+"RIFE %@" = "RIFE %@";
+"RIFE error: %@" = "RIFE error: %@";
+"%@ %d" = "%@ %d";
+"%@ %d · %@" = "%@ %d · %@";
+"Seeking to %@..." = "Seeking to %@...";
+"1x" = "1x";
+"%.2gx" = "%.2gx";
