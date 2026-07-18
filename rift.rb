@@ -1,6 +1,6 @@
 cask "rift" do
-  version "1.0.0-dev.49-3-g1bae421"
-  sha256 "d8f7d9377e52360a0c4037f45218c17e42ff5292975f71d8e6a0bdf20f34d952"
+  version "1.0.0-dev.56"
+  sha256 "2622ba982a22c5ce97465be212ce3926d8859d8e56e4a86b796caed941169455"
 
   url "https://github.com/rafaelo96/RiftVideoPlayer/releases/download/v#{version}/Rift.dmg"
   name "Rift"
@@ -13,8 +13,7 @@ cask "rift" do
 
   postflight do
     system_command "xattr",
-                   args: ["-cr", "#{appdir}/Rift.app"],
-                   sudo: true
+                   args: ["-cr", "#{appdir}/Rift.app"]
   end
 
   zap trash: [
