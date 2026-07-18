@@ -45,7 +45,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     @Published var fluxWorkingWidth: Int? = nil
     @Published var fluxOpticalFlowUsage: Double = 0.0
     @Published var fluxBlendFallbackUsage: Double = 0.0
-    @Published var rifeStatus: String = "RIFE sin modelo"
+    @Published var rifeStatus: String = NSLocalizedString("RIFE without model", comment: "")
     @Published var isRIFELoaded = false
     @Published var audioTracks: [AudioTrack] = []
     @Published var selectedAudioTrackIndex: Int = 0
@@ -77,7 +77,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         IOPMAssertionCreateWithName(
             kIOPMAssertPreventUserIdleDisplaySleep as CFString,
             IOPMAssertionLevel(kIOPMAssertionLevelOn),
-            "Rift reproduciendo video" as CFString,
+            NSLocalizedString("Player is active", comment: "") as CFString,
             &sleepAssertionID
         )
     }
@@ -431,7 +431,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
     func openVideo() {
         let panel = NSOpenPanel()
-        panel.title = "Open Video"
+        panel.title = NSLocalizedString("Open Video", comment: "")
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.data]
@@ -489,7 +489,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         fluxWorkingWidth = nil
         fluxOpticalFlowUsage = 0.0
         fluxBlendFallbackUsage = 0.0
-        rifeStatus = "RIFE sin modelo"
+        rifeStatus = NSLocalizedString("RIFE without model", comment: "")
         isRIFELoaded = false
         audioTracks = []
         selectedAudioTrackIndex = 0
@@ -505,7 +505,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             // Skip validation for HLS streams and non-file URLs
         } else if !Self.isValidVideoFile(url) {
             Logger.playback.warning("Invalid video file rejected: \(url.path, privacy: .public)")
-            statusMessage = "El archivo no parece ser un video válido."
+            statusMessage = NSLocalizedString("Invalid video file", comment: "")
             hasVideo = false
             return
         }
@@ -517,7 +517,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
             return
         }
 
-        statusMessage = "Inspeccionando archivo..."
+        statusMessage = NSLocalizedString("Inspecting file...", comment: "")
         Task { @MainActor in
             await prepareVideoMetadata(for: url)
             playVideo(url, displayName: url.lastPathComponent)
@@ -538,7 +538,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         interpolationMode = .disabled
         fpsMode = .native
         visualEnhancementsEnabled = false
-        statusMessage = "Abriendo MKV directo..."
+        statusMessage = NSLocalizedString("Opening MKV direct...", comment: "")
 
         Task { @MainActor in
             await prepareVideoMetadata(for: url)
@@ -555,7 +555,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         let resumeTime = currentTime
         let shouldResume = isPlaying
 
-        statusMessage = "Cambiando a modo compatible..."
+        statusMessage = NSLocalizedString("Switching to compatible mode...", comment: "")
         directPlaybackController?.shutdown()
         directPlaybackController = nil
         directPlaybackURL = nil
@@ -942,7 +942,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         if allowFastRemux,
            let cachedURL = Self.cachedCompatibleVideoURL(for: sourceURL),
            Self.isUsableCachedVideo(cachedURL) {
-            statusMessage = "Abriendo cache compatible..."
+            statusMessage = NSLocalizedString("Opening cache...", comment: "")
             convertedVideoDirectoryURL = nil
             convertedVideoURL = cachedURL
             convertedVideoShouldCleanup = false
@@ -1057,7 +1057,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
 
         // Transcodificar video usando GPU acelerada
-        statusMessage = "Convirtiendo video (hardware)..."
+        statusMessage = NSLocalizedString("Converting video (hardware)...", comment: "")
         var hwArgs = [
             "-hide_banner",
             "-loglevel", "error",
@@ -1085,7 +1085,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
 
         // Fallback: transcodificación por software
-        statusMessage = "Convirtiendo video (compatible)..."
+        statusMessage = NSLocalizedString("Converting video (compatible)...", comment: "")
         var swArgs = [
             "-hide_banner",
             "-loglevel", "error",
@@ -1145,7 +1145,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
 
         attemptedCompatibleFallback = true
-        statusMessage = "Reintentando conversion compatible..."
+        statusMessage = NSLocalizedString("Retrying compatible conversion...", comment: "")
         isPlaying = false
         cleanupConvertedVideo()
         Task { @MainActor in
@@ -1212,7 +1212,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
     private func prepareFramePlusVideo(from sourceURL: URL) async {
         guard !isFramePlusPreparing else { return }
         guard let ffmpegURL = findFFmpeg() else {
-            statusMessage = "Frame⁺ HQ necesita ffmpeg; usando Frame⁺ en vivo."
+            statusMessage = NSLocalizedString("Frame⁺ HQ needs ffmpeg; using live Frame⁺.", comment: "")
             isFramePlusPreparing = false
             isFramePlusPreRendered = false
             return
@@ -1220,7 +1220,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
         isFramePlusPreparing = true
         isFramePlusPreRendered = false
-        statusMessage = "Frame⁺ preparando 60fps..."
+        statusMessage = NSLocalizedString("Frame⁺ preparing 60fps...", comment: "")
 
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("Rift-FramePlus-\(UUID().uuidString).mp4")
@@ -1264,7 +1264,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         } else {
             cleanupFramePlusVideo()
             if interpolationMode == .motion2Intense {
-                statusMessage = "Frame⁺ HQ no pudo preparar 60fps; usando Frame⁺ en vivo."
+                statusMessage = NSLocalizedString("Frame⁺ HQ could not prepare 60fps; using live Frame⁺.", comment: "")
                 isFramePlusPreRendered = false
             }
         }
@@ -1380,7 +1380,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    self.statusMessage = "\(phase)... \(elapsedSeconds)s"
+                self.statusMessage = String(format: NSLocalizedString("%@... %d s", comment: ""), phase, elapsedSeconds)
                 }
 
                 let startupDuration: TimeInterval = playbackOffset > 0 ? 0.75 : 2.5
@@ -1464,7 +1464,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                     self.conversionProcess = nil
                 }
                 if !success, self.playbackSourceURL == playbackURL {
-                    self.statusMessage = "La preparacion se detuvo; puedes reabrir el archivo para reintentar."
+                    self.statusMessage = NSLocalizedString("Preparation stopped; you can reopen the file to retry.", comment: "")
                 }
             }
         }
@@ -1566,7 +1566,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         hlsSeekTask = Task { @MainActor in
             let shouldResumePlayback = shouldResume ?? shouldResumeAfterHLSSeek()
             hlsShouldResumePlayback = shouldResumePlayback
-            statusMessage = "Saltando a \(formattedTime(targetSeconds))..."
+            statusMessage = String(format: NSLocalizedString("Seeking to %@...", comment: ""), formattedTime(targetSeconds))
             currentTime = targetSeconds
             hlsPlaybackOffset = targetSeconds
             isPlaying = shouldResumePlayback
@@ -1841,7 +1841,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                 for (index, option) in audibleOptions.enumerated() {
                     let language = option.extendedLanguageTag ?? option.locale?.identifier
                     let label = Self.localizedMediaSelectionLabel(
-                        fallbackPrefix: "Audio",
+                        fallbackPrefix: NSLocalizedString("Audio", comment: ""),
                         index: index,
                         displayName: option.displayName,
                         language: language
@@ -1859,7 +1859,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                         label = Locale.current.localizedString(forLanguageCode: effective)
                             ?? effective.uppercased()
                     } else {
-                        label = "Pista \(index + 1)"
+                        label = String(format: NSLocalizedString("Track %d", comment: ""), index + 1)
                     }
                     result.append(AudioTrack(
                         id: index,
@@ -1912,7 +1912,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                     let id = "subtitle-\(index)"
                     let language = option.extendedLanguageTag ?? option.locale?.identifier
                     let label = Self.localizedMediaSelectionLabel(
-                        fallbackPrefix: "Subtitulo",
+                        fallbackPrefix: NSLocalizedString("Subtitle", comment: ""),
                         index: index,
                         displayName: option.displayName,
                         language: language
@@ -2174,11 +2174,11 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
 
     private static func localizedTrackLabel(prefix: String, index: Int, language: String?) -> String {
         guard let language, !language.isEmpty, language != "und" else {
-            return "\(prefix) \(index + 1)"
+            return String(format: NSLocalizedString("%@ %d", comment: ""), prefix, index + 1)
         }
 
         let localized = Locale.current.localizedString(forLanguageCode: language) ?? language.uppercased()
-        return "\(prefix) \(index + 1) · \(localized)"
+        return String(format: NSLocalizedString("%@ %d · %@", comment: ""), prefix, index + 1, localized)
     }
 
     private func cleanupConvertedVideo(keepingFramePlus: Bool = false) {

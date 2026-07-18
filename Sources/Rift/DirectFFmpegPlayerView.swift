@@ -197,7 +197,7 @@ extension DirectFFmpegPlayerView {
         private func handleState(_ playerState: KSPlayerState, layer: KSPlayerLayer) {
             switch playerState {
             case .initialized, .preparing:
-                state?.statusMessage = "Abriendo MKV directo..."
+                state?.statusMessage = NSLocalizedString("Opening MKV direct...", comment: "")
                 state?.isPlaying = false
             case .readyToPlay:
                 syncTracks(from: layer)
@@ -209,7 +209,7 @@ extension DirectFFmpegPlayerView {
                 setPlaybackRate(state?.playbackRate ?? 1.0)
             case .buffering:
                 state?.isPlaying = true
-                state?.statusMessage = "Cargando..."
+                state?.statusMessage = NSLocalizedString("Loading...", comment: "")
             case .bufferFinished:
                 state?.isPlaying = true
                 state?.statusMessage = nil
@@ -220,7 +220,7 @@ extension DirectFFmpegPlayerView {
                 state?.currentTime = state?.duration ?? 0
             case .error:
                 state?.isPlaying = false
-                state?.directPlaybackDidFail("No se pudo abrir el MKV directo.")
+                state?.directPlaybackDidFail(NSLocalizedString("Could not open MKV.", comment: ""))
             }
         }
 
@@ -249,10 +249,12 @@ extension DirectFFmpegPlayerView {
             audioTracksByIndex = Dictionary(uniqueKeysWithValues: audioTracks.enumerated().map { ($0.offset, $0.element) })
             subtitleTracksByIndex = Dictionary(uniqueKeysWithValues: subtitleTracks.enumerated().map { ($0.offset, $0.element) })
 
+            let audioPrefix = NSLocalizedString("Audio", comment: "")
+            let subtitlePrefix = NSLocalizedString("Subtitle", comment: "")
             let audioModels = audioTracks.enumerated().map { index, track in
                 PlayerState.AudioTrack(
                     id: index,
-                    label: label(prefix: "Audio", index: index, track: track),
+                    label: label(prefix: audioPrefix, index: index, track: track),
                     language: track.languageCode
                 )
             }
@@ -262,7 +264,7 @@ extension DirectFFmpegPlayerView {
                     id: "direct-audio-\(index)",
                     kind: .audio,
                     index: index,
-                    label: label(prefix: "Audio", index: index, track: track),
+                    label: label(prefix: audioPrefix, index: index, track: track),
                     languageCode: track.languageCode
                 )
             } + subtitleTracks.enumerated().map { index, track in
@@ -270,7 +272,7 @@ extension DirectFFmpegPlayerView {
                     id: "direct-subtitle-\(index)",
                     kind: .subtitle,
                     index: index,
-                    label: label(prefix: "Subtitulo", index: index, track: track),
+                    label: label(prefix: subtitlePrefix, index: index, track: track),
                     languageCode: track.languageCode
                 )
             }
@@ -297,19 +299,19 @@ extension DirectFFmpegPlayerView {
         private func label(prefix: String, index: Int, track: any MediaPlayerTrack) -> String {
             let trimmedName = track.name.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedName.isEmpty, trimmedName.lowercased() != "unknown" {
-                return "\(prefix) \(index + 1) · \(trimmedName)"
+                return String(format: NSLocalizedString("%@ %d · %@", comment: ""), prefix, index + 1, trimmedName)
             }
 
             if let language = track.language, !language.isEmpty {
-                return "\(prefix) \(index + 1) · \(language)"
+                return String(format: NSLocalizedString("%@ %d · %@", comment: ""), prefix, index + 1, language)
             }
 
             if let languageCode = track.languageCode, !languageCode.isEmpty, languageCode != "und" {
                 let language = Locale.current.localizedString(forLanguageCode: languageCode) ?? languageCode.uppercased()
-                return "\(prefix) \(index + 1) · \(language)"
+                return String(format: NSLocalizedString("%@ %d · %@", comment: ""), prefix, index + 1, language)
             }
 
-            return "\(prefix) \(index + 1)"
+            return String(format: NSLocalizedString("%@ %d", comment: ""), prefix, index + 1)
         }
     }
 }

@@ -38,15 +38,22 @@ struct RiftApp: App {
                 }
                 .keyboardShortcut("o", modifiers: .command)
             }
+            CommandMenu("Language") {
+                Button("English") { AppDelegate.setLanguage("en") }
+                Button("Spanish") { AppDelegate.setLanguage("es") }
+            }
             CommandGroup(replacing: .appInfo) {
                 Button("About Rift") {
+                    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+                    let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+                    let credits = String(format: NSLocalizedString("Rift Credits", comment: ""), version, build)
                     NSApplication.shared.orderFrontStandardAboutPanel(
                         options: [
-                            .applicationName: "Rift",
-                            .applicationVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0",
-                            .version: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1",
+                            .applicationName: NSLocalizedString("Rift", comment: ""),
+                            .applicationVersion: version,
+                            .version: build,
                             .credits: NSAttributedString(
-                                string: "A native video player with Frame⁺ AI interpolation, HDR support, and Metal-accelerated rendering.\nBuild: \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")+\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?")",
+                                string: credits,
                                 attributes: [
                                     .font: NSFont.systemFont(ofSize: 11),
                                     .foregroundColor: NSColor.secondaryLabelColor
@@ -66,6 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static var fallbackWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let lang = UserDefaults.standard.stringArray(forKey: "AppleLanguages")?.first,
+           ["en", "es"].contains(lang) {
+            UserDefaults.standard.set([lang], forKey: "AppleLanguages")
+        }
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         Self.bringPlayerWindowToFront()
@@ -91,6 +102,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static func enqueueOpenURLs(_ urls: [URL]) {
         pendingOpenURLs.append(contentsOf: urls)
         NotificationCenter.default.post(name: .riftOpenURLs, object: nil, userInfo: ["urls": urls])
+    }
+
+    @MainActor
+    static func setLanguage(_ code: String) {
+        guard ["en", "es"].contains(code) else { return }
+        UserDefaults.standard.set([code], forKey: "AppleLanguages")
+        UserDefaults.standard.synchronize()
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("Restart required", comment: "")
+        alert.informativeText = NSLocalizedString("The language change will take effect after restarting Rift.", comment: "")
+        alert.addButton(withTitle: NSLocalizedString("Restart Now", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Later", comment: ""))
+        if alert.runModal() == .alertFirstButtonReturn {
+            let url = Bundle.main.bundleURL
+            let config = NSWorkspace.OpenConfiguration()
+            config.createsNewApplicationInstance = true
+            NSWorkspace.shared.open(url, configuration: config)
+            NSApplication.shared.terminate(nil)
+        }
     }
 
     @MainActor
@@ -123,7 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Rift"
+            window.title = NSLocalizedString("Rift", comment: "")
             window.contentViewController = hostingController
             window.center()
             window.makeKeyAndOrderFront(nil)

@@ -22,11 +22,11 @@ final class RIFECoreMLInterpolator {
     var statusText: String {
         switch state {
         case .unavailable:
-            return "RIFE sin modelo"
+            return NSLocalizedString("RIFE without model", comment: "")
         case .loaded(_, let description):
-            return "RIFE \(description.name)"
+            return String(format: NSLocalizedString("RIFE %@", comment: ""), description.name)
         case .failed(let reason):
-            return "RIFE error: \(reason)"
+            return String(format: NSLocalizedString("RIFE error: %@", comment: ""), reason)
         }
     }
 
