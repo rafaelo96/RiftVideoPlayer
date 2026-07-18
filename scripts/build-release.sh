@@ -54,7 +54,10 @@ if [ "${SKIP_SIGN:-false}" != "true" ]; then
     fi
 fi
 
-# 4. Create DMG with custom background
+# 4. Remove quarantine from app before packaging
+xattr -cr "$APP_BUNDLE" 2>/dev/null || true
+
+# 5. Create DMG with custom background
 echo "--- Creating DMG ---"
 mkdir -p "$(dirname "$APP_BUNDLE")"
 rm -f "$DMG_PATH"
