@@ -106,95 +106,37 @@ export default function Download() {
           </a>
         </div>
 
-        <div
-          style={{
-            marginTop: "clamp(2rem, 4vw, 3rem)",
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "clamp(1.5rem, 5vw, 4rem)",
-          }}
-        >
-          <div
-            style={{
-              background: "var(--color-surface)",
-              borderRadius: "var(--radius-lg)",
-              padding: "clamp(1.25rem, 3vw, 2rem)",
-            }}
-          >
-            <div className="ay-download-label" style={{ color: "var(--color-dim)", marginBottom: "var(--space-sm)" }}>
-              Homebrew
+        <div className="ay-download-extras">
+          <div className="ay-download-card">
+            <div>
+              <div className="ay-download-label">Homebrew</div>
+              <h3>Install with a single command</h3>
+              <div className="ay-code-block" onClick={copyBrew}>
+                <span>$ brew install rafaelo96/rift/rift</span>
+                <span className="ay-code-block__action" style={{ color: copied ? "var(--color-accent)" : undefined }}>
+                  {copied ? "Copied!" : "Copy"}
+                </span>
+              </div>
+              <p>Auto-updates via Homebrew. No configuration needed.</p>
             </div>
-            <h3 style={{ color: "var(--color-ink)", marginBottom: "var(--space-sm)" }}>
-              Install with a single command
-            </h3>
-            <div
-              onClick={copyBrew}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                background: "var(--color-bg)",
-                borderRadius: "var(--radius-md)",
-                padding: "var(--space-sm) var(--space-md)",
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-sm)",
-                color: "var(--color-ink)",
-                cursor: "pointer",
-                border: "1px solid var(--color-rule)",
-                userSelect: "all",
-              }}
-            >
-              <span>$ brew install rafaelo96/rift/rift</span>
-              <span style={{ color: copied ? "var(--color-accent)" : "var(--color-dim)", fontSize: "var(--text-xs)", marginLeft: "var(--space-sm)", whiteSpace: "nowrap" }}>
-                {copied ? "Copied!" : "Copy"}
-              </span>
-            </div>
-            <p style={{ color: "var(--color-ink-soft)", fontSize: "var(--text-xs)", marginTop: "var(--space-xs)" }}>
-              Auto-updates via Homebrew. No configuration needed.
-            </p>
           </div>
 
-          <div
-            style={{
-              background: "var(--color-surface)",
-              borderRadius: "var(--radius-lg)",
-              padding: "clamp(1.25rem, 3vw, 2rem)",
-            }}
-          >
-            <div className="ay-download-label" style={{ color: "var(--color-dim)", marginBottom: "var(--space-sm)" }}>
-              Gatekeeper? No problem.
+          <div className="ay-download-card">
+            <div>
+              <div className="ay-download-label">Gatekeeper? No problem.</div>
+              <h3>macOS might block Rift</h3>
+              <p>
+                If macOS says{" "}
+                <span style={{ fontStyle: "italic" }}>
+                  &ldquo;Rift is damaged&rdquo;
+                </span>{" "}
+                after downloading the DMG, run this in Terminal:
+              </p>
+              <div className="ay-code-block">
+                <span>$ xattr -cr /Applications/Rift.app</span>
+              </div>
+              <p>Or use Homebrew above &mdash; it handles this automatically.</p>
             </div>
-            <h3 style={{ color: "var(--color-ink)", marginBottom: "var(--space-sm)" }}>
-              macOS might block Rift
-            </h3>
-            <p style={{ color: "var(--color-ink-soft)", fontSize: "var(--text-sm)", lineHeight: 1.6 }}>
-              If macOS says{" "}
-              <span style={{ color: "var(--color-ink)", fontStyle: "italic" }}>
-                &ldquo;Rift is damaged&rdquo;
-              </span>{" "}
-              after downloading the DMG, run this in Terminal:
-            </p>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                background: "var(--color-bg)",
-                borderRadius: "var(--radius-md)",
-                padding: "var(--space-sm) var(--space-md)",
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-sm)",
-                color: "var(--color-ink)",
-                marginTop: "var(--space-sm)",
-                border: "1px solid var(--color-rule)",
-                userSelect: "all",
-              }}
-            >
-              <span>$ xattr -cr /Applications/Rift.app</span>
-            </div>
-            <p style={{ color: "var(--color-ink-soft)", fontSize: "var(--text-xs)", marginTop: "var(--space-xs)" }}>
-              Or use Homebrew above &mdash; it handles this automatically.
-            </p>
           </div>
         </div>
       </div>
