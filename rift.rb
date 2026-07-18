@@ -8,13 +8,13 @@ cask "rift" do
   homepage "https://github.com/rafaelo96/RiftVideoPlayer"
 
   auto_updates false
-  quarantine false
 
   app "Rift.app"
 
   postflight do
     system_command "xattr",
-                   args: ["-cr", "#{appdir}/Rift.app"]
+                   args: ["-cr", "#{appdir}/Rift.app"],
+                   sudo: true
   end
 
   zap trash: [
