@@ -11,6 +11,7 @@ interface ReleaseInfo {
 
 export default function Download() {
   const [release, setRelease] = useState<ReleaseInfo | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetch(GITHUB_API_LATEST)
@@ -29,10 +30,16 @@ export default function Download() {
           });
         }
       })
-      .catch(() => {
-        // Fallback: keep null, card shows no version detail
-      });
+      .catch(() => {});
   }, []);
+
+  const copyBrew = async () => {
+    try {
+      await navigator.clipboard.writeText("brew install rafaelo96/rift/rift");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
 
   return (
     <section id="download" className="ay-section ay-section--dark">
@@ -54,7 +61,7 @@ export default function Download() {
           </div>
           <p className="ay-sub ay-sub--dark">
             Free, open-source, and built for macOS. Grab the release if you want
-            to watch now, or open the source if you want to inspect the pipeline.
+            to watch now, or install with Homebrew for automatic updates.
           </p>
         </div>
 
@@ -97,6 +104,98 @@ export default function Download() {
               View GitHub repo &rarr;
             </span>
           </a>
+        </div>
+
+        <div
+          style={{
+            marginTop: "clamp(2rem, 4vw, 3rem)",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "clamp(1.5rem, 5vw, 4rem)",
+          }}
+        >
+          <div
+            style={{
+              background: "var(--color-surface)",
+              borderRadius: "var(--radius-lg)",
+              padding: "clamp(1.25rem, 3vw, 2rem)",
+            }}
+          >
+            <div className="ay-download-label" style={{ color: "var(--color-dim)", marginBottom: "var(--space-sm)" }}>
+              Homebrew
+            </div>
+            <h3 style={{ color: "var(--color-ink)", marginBottom: "var(--space-sm)" }}>
+              Install with a single command
+            </h3>
+            <div
+              onClick={copyBrew}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "var(--color-bg)",
+                borderRadius: "var(--radius-md)",
+                padding: "var(--space-sm) var(--space-md)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-sm)",
+                color: "var(--color-ink)",
+                cursor: "pointer",
+                border: "1px solid var(--color-rule)",
+                userSelect: "all",
+              }}
+            >
+              <span>$ brew install rafaelo96/rift/rift</span>
+              <span style={{ color: copied ? "var(--color-accent)" : "var(--color-dim)", fontSize: "var(--text-xs)", marginLeft: "var(--space-sm)", whiteSpace: "nowrap" }}>
+                {copied ? "Copied!" : "Copy"}
+              </span>
+            </div>
+            <p style={{ color: "var(--color-ink-soft)", fontSize: "var(--text-xs)", marginTop: "var(--space-xs)" }}>
+              Auto-updates via Homebrew. No configuration needed.
+            </p>
+          </div>
+
+          <div
+            style={{
+              background: "var(--color-surface)",
+              borderRadius: "var(--radius-lg)",
+              padding: "clamp(1.25rem, 3vw, 2rem)",
+            }}
+          >
+            <div className="ay-download-label" style={{ color: "var(--color-dim)", marginBottom: "var(--space-sm)" }}>
+              Gatekeeper? No problem.
+            </div>
+            <h3 style={{ color: "var(--color-ink)", marginBottom: "var(--space-sm)" }}>
+              macOS might block Rift
+            </h3>
+            <p style={{ color: "var(--color-ink-soft)", fontSize: "var(--text-sm)", lineHeight: 1.6 }}>
+              If macOS says{" "}
+              <span style={{ color: "var(--color-ink)", fontStyle: "italic" }}>
+                &ldquo;Rift is damaged&rdquo;
+              </span>{" "}
+              after downloading the DMG, run this in Terminal:
+            </p>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "var(--color-bg)",
+                borderRadius: "var(--radius-md)",
+                padding: "var(--space-sm) var(--space-md)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-sm)",
+                color: "var(--color-ink)",
+                marginTop: "var(--space-sm)",
+                border: "1px solid var(--color-rule)",
+                userSelect: "all",
+              }}
+            >
+              <span>$ xattr -cr /Applications/Rift.app</span>
+            </div>
+            <p style={{ color: "var(--color-ink-soft)", fontSize: "var(--text-xs)", marginTop: "var(--space-xs)" }}>
+              Or use Homebrew above &mdash; it handles this automatically.
+            </p>
+          </div>
         </div>
       </div>
     </section>
