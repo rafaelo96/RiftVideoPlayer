@@ -1068,7 +1068,9 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                 .appendingPathComponent("Rift-\(UUID().uuidString).mp4")
         }
 
-        let isAudioCopyable = ["aac", "mp3", "ac3", "eac3", "flac", "alac"].contains(audioCodec)
+        // AVFoundation on macOS cannot decode AC3/EAC3 (passthrough only), so copy
+        // would produce an unplayable MP4. Transcode those to AAC; copy the rest.
+        let isAudioCopyable = ["aac", "mp3", "flac", "alac"].contains(audioCodec)
         let copyOrAACAudioArgs = isAudioCopyable
             ? ["-c:a", "copy"]
             : ["-c:a", "aac", "-b:a", "192k"]
