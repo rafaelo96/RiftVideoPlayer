@@ -1090,6 +1090,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                 "-map_metadata", "0",
                 "-c:v", "copy",
             ] + mp4VideoTagArgs + copyOrAACAudioArgs + [
+                "-strict", "unofficial",
                 "-c:s", "mov_text",
                 "-y", outputURL.path
             ]
@@ -1104,6 +1105,17 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
                 }
                 return
             }
+        }
+
+        // Never re-encode natively-copyable codecs. A failed fast-remux for
+        // hevc/h264/h265 (e.g. missing -strict for Dolby Vision) must not fall
+        // back to a 4K HDR -> SDR transcode, which hangs for minutes and
+        // destroys HDR. Surface the failure instead.
+        if ["h264", "hevc", "h265"].contains(videoCodec) {
+            Logger.playback.warning("Fast-remux failed for copyable codec \(videoCodec ?? "?"); skipping destructive transcode.")
+            statusMessage = NSLocalizedString("Could not prepare this video for playback", comment: "")
+            hasVideo = false
+            return
         }
 
         // Transcodificar video usando GPU acelerada
