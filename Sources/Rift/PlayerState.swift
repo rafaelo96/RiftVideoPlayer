@@ -548,9 +548,7 @@ final class PlayerState: NSObject, ObservableObject, AVPlayerItemLegibleOutputPu
         }
 
         if needsConversion(url) {
-            Task { @MainActor in
-                await convertAndLoadVideo(url)
-            }
+            loadDirectVideo(url)
             return
         }
 
